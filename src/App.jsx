@@ -73,18 +73,164 @@ const groupProducts = (dbRows) => {
 
 function Carousel({ imgs, onZoom }) {
   const [idx, setIdx] = useState(0);
+  const [hoverPrev, setHoverPrev] = useState(false);
+  const [hoverNext, setHoverNext] = useState(false);
+  const [hoverZoom, setHoverZoom] = useState(false);
   const t = useRef(null);
+
   if (!imgs || !imgs.length) return null;
+
   const go = (n) => setIdx(Math.max(0, Math.min(imgs.length - 1, n)));
+
+  const handlePrev = (e) => {
+    e.stopPropagation();
+    go(idx - 1);
+  };
+
+  const handleNext = (e) => {
+    e.stopPropagation();
+    go(idx + 1);
+  };
+
   return (
     <div className="carousel-container"
       onTouchStart={e => { t.current = e.touches[0].clientX; }}
       onTouchEnd={e => { const dx = e.changedTouches[0].clientX - t.current; if (dx < -40) go(idx + 1); if (dx > 40) go(idx - 1); }}
-      onClick={() => onZoom && onZoom(imgs[idx])}>
-      <img key={imgs[idx]} src={imgs[idx]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", animation: "fI .2s ease" }} />
+      style={{ position: "relative", userSelect: "none" }}>
+      
+      {/* Imagen Principal */}
+      <img key={imgs[idx]} src={imgs[idx]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", animation: "fI .35s ease-in-out" }} />
+      
+      {/* Botón Lupa en esquina superior derecha */}
+      {onZoom && (
+        <button 
+          onClick={(e) => { e.stopPropagation(); onZoom(imgs[idx]); }}
+          onMouseEnter={() => setHoverZoom(true)}
+          onMouseLeave={() => setHoverZoom(false)}
+          className="carousel-zoom-btn"
+          title="Ampliar imagen"
+          style={{
+            position: "absolute",
+            top: 16,
+            right: 16,
+            width: 38,
+            height: 38,
+            borderRadius: "50%",
+            background: hoverZoom ? "#1a1612" : "rgba(250, 248, 245, 0.9)",
+            border: "none",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.12)",
+            transform: hoverZoom ? "scale(1.08)" : "scale(1)",
+            transition: "all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94)"
+          }}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={hoverZoom ? "#faf8f5" : "#1a1612"} strokeWidth="2.5">
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            <line x1="11" y1="8" x2="11" y2="14" />
+            <line x1="8" y1="11" x2="14" y2="11" />
+          </svg>
+        </button>
+      )}
+
+      {/* Flechas de Navegación */}
       {imgs.length > 1 && (
-        <div style={{ position: "absolute", bottom: 10, left: 0, right: 0, display: "flex", gap: 6, justifyContent: "center" }}>
-          {imgs.map((_, i) => <button key={i} className={"dot" + (i === idx ? " on" : "")} onClick={e => { e.stopPropagation(); setIdx(i); }} />)}
+        <>
+          {idx > 0 && (
+            <button 
+              onClick={handlePrev}
+              onMouseEnter={() => setHoverPrev(true)}
+              onMouseLeave={() => setHoverPrev(false)}
+              className="carousel-arrow prev"
+              style={{
+                position: "absolute",
+                left: 12,
+                top: "50%",
+                transform: hoverPrev ? "translateY(-50%) scale(1.08)" : "translateY(-50%) scale(1)",
+                width: 36,
+                height: 36,
+                borderRadius: "50%",
+                background: hoverPrev ? "#1a1612" : "rgba(250, 248, 245, 0.9)",
+                border: "none",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                transition: "all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94)"
+              }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={hoverPrev ? "#faf8f5" : "#1a1612"} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+            </button>
+          )}
+          {idx < imgs.length - 1 && (
+            <button 
+              onClick={handleNext}
+              onMouseEnter={() => setHoverNext(true)}
+              onMouseLeave={() => setHoverNext(false)}
+              className="carousel-arrow next"
+              style={{
+                position: "absolute",
+                right: 12,
+                top: "50%",
+                transform: hoverNext ? "translateY(-50%) scale(1.08)" : "translateY(-50%) scale(1)",
+                width: 36,
+                height: 36,
+                borderRadius: "50%",
+                background: hoverNext ? "#1a1612" : "rgba(250, 248, 245, 0.9)",
+                border: "none",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                transition: "all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94)"
+              }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={hoverNext ? "#faf8f5" : "#1a1612"} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            </button>
+          )}
+        </>
+      )}
+
+      {/* Indicador de puntitos con barra de vidrio esmerilado */}
+      {imgs.length > 1 && (
+        <div style={{ 
+          position: "absolute", 
+          bottom: 16, 
+          left: "50%", 
+          transform: "translateX(-50%)",
+          display: "flex", 
+          gap: 6, 
+          justifyContent: "center",
+          background: "rgba(26, 22, 18, 0.2)",
+          backdropFilter: "blur(4px)",
+          WebkitBackdropFilter: "blur(4px)",
+          padding: "6px 10px",
+          borderRadius: "100px",
+          boxShadow: "0 2px 10px rgba(0,0,0,0.05)"
+        }}>
+          {imgs.map((_, i) => (
+            <button 
+              key={i} 
+              className={"dot" + (i === idx ? " on" : "")} 
+              onClick={e => { e.stopPropagation(); setIdx(i); }} 
+              style={{
+                width: i === idx ? 14 : 6,
+                height: 6,
+                borderRadius: i === idx ? 3 : "50%",
+                background: i === idx ? "#faf8f5" : "rgba(250, 248, 245, 0.5)",
+                border: "none",
+                cursor: "pointer",
+                padding: 0,
+                transition: "all 0.25s ease"
+              }}
+            />
+          ))}
         </div>
       )}
     </div>
