@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <style type="text/css">
+      @import url('https://fonts.googleapis.com/css2?family=Cormorant+SC:wght@500&amp;display=swap');
+      .favicon-text {
+        font-family: 'Cormorant SC', Georgia, 'Times New Roman', serif;
+        font-weight: 500;
+        fill: #e8c97a;
+      }
+    </style>
+  </defs>
+  <!-- Elegant dark background matching the brand's aesthetic -->
+  <rect width="32" height="32" rx="6" fill="#1a1612"/>
+  <!-- Elegant serif M in gold, centered -->
+  <text x="16" y="23.5" class="favicon-text" font-size="22" text-anchor="middle">M</text>
+</svg>
