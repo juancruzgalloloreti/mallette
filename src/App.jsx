@@ -569,7 +569,13 @@ function AdminLogin({ onLogin }) {
       if (window.google && document.getElementById("google-signin-btn-container")) {
         window.google.accounts.id.renderButton(
           document.getElementById("google-signin-btn-container"),
-          { theme: "outline", size: "large", text: "signin_with", width: "300" }
+          { 
+            theme: "filled_black", 
+            size: "large", 
+            shape: "pill",
+            text: "continue_with", 
+            width: "300" 
+          }
         );
         clearInterval(interval);
       }
