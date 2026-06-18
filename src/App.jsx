@@ -136,7 +136,7 @@ function Hdr({ view, setView, n, setShowCart, user, onLogin, onLogout }) {
           <button onClick={() => setView("shop")} style={{ padding: "7px 14px", borderRadius: 100, border: "1px solid " + (view === "shop" ? "#1a1612" : "transparent"), background: view === "shop" ? "#1a1612" : "none", color: view === "shop" ? "#faf8f5" : "#78716c", fontSize: 13, cursor: "pointer", fontFamily: "Inter,sans-serif", transition: "all .2s" }}>
             Tienda
           </button>
-          {(!user || isAdmin) && (
+          {isAdmin && (
             <button onClick={() => setView("admin")} style={{ padding: "7px 14px", borderRadius: 100, border: "1px solid " + (view === "admin" ? "#1a1612" : "transparent"), background: view === "admin" ? "#1a1612" : "none", color: view === "admin" ? "#faf8f5" : "#78716c", fontSize: 13, cursor: "pointer", fontFamily: "Inter,sans-serif", transition: "all .2s" }}>
               Admin
             </button>
