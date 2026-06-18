@@ -20,8 +20,10 @@ html,body{background:#faf8f5;font-family:Inter,sans-serif;color:#1a1612;width:10
 .fi{animation:fI .3s ease both}
 
 /* Header */
-.hdr{position:sticky;top:0;z-index:50;background:rgba(250,248,245,.94);backdrop-filter:blur(16px);border-bottom:1px solid #e8e2d9;transition:box-shadow .3s}
+.hdr{position:sticky;top:0;z-index:50;background:rgba(250,248,245,.94);backdrop-filter:blur(16px);border-bottom:1px solid #e8e2d9;transition:box-shadow .3s, transform .3s ease}
 .hdr.up{box-shadow:0 2px 24px rgba(0,0,0,.08)}
+.hdr.hidden{transform:translateY(-100%)}
+.hdr.hidden ~ .tabs-wrapper, .hdr.hidden ~ * .tabs-wrapper{top:0}
 
 /* Hero */
 .hero{min-height:400px;background:linear-gradient(160deg,#1a0f08 0%,#2c1a0e 30%,#1e1510 60%,#0f0a06 100%);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
@@ -112,7 +114,7 @@ html,body{background:#faf8f5;font-family:Inter,sans-serif;color:#1a1612;width:10
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 
 /* Layout components */
-.tabs-wrapper {background:#fff;border-bottom:1px solid #ede8e0;width:100%;position:sticky;top:60px;z-index:40}
+.tabs-wrapper {background:#fff;border-bottom:1px solid #ede8e0;width:100%;position:sticky;top:60px;z-index:40;transition:top .3s ease}
 .tabs-container {padding:0 16px;display:flex}
 .hero-inner {text-align:center;position:relative;z-index:1;padding:80px 16px}
 .shop-section {margin-bottom:48px;background:#faf8f5}

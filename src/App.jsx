@@ -182,16 +182,29 @@ function WAF() {
 
 function Hdr({ view, setView, n, setShowCart, user, onLogin, onLogout }) {
   const [scrolled, setScrolled] = useState(false);
+  const [visible, setVisible] = useState(true);
+  const lastScrollY = useRef(0);
   const isAdmin = user?.email === "juancruzgalloloreti@gmail.com";
 
   useEffect(() => {
-    const h = () => setScrolled(window.scrollY > 40);
-    window.addEventListener("scroll", h);
+    const h = () => {
+      const currentScrollY = window.scrollY;
+      setScrolled(currentScrollY > 40);
+      if (currentScrollY <= 40) {
+        setVisible(true);
+      } else if (currentScrollY > lastScrollY.current) {
+        setVisible(false);
+      } else {
+        setVisible(true);
+      }
+      lastScrollY.current = currentScrollY;
+    };
+    window.addEventListener("scroll", h, { passive: true });
     return () => window.removeEventListener("scroll", h);
   }, []);
 
   return (
-    <header className={"hdr" + (scrolled ? " up" : "")}>
+    <header className={"hdr" + (scrolled ? " up" : "") + (visible ? "" : " hidden")}>
       <div style={{ maxWidth: "100%", margin: "0 auto", padding: "0 16px", height: 60, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <button onClick={() => setView("shop")} style={{ background: "none", border: "none", cursor: "pointer" }}>
           <span className="brand-title" style={{
