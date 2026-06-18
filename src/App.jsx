@@ -194,13 +194,7 @@ function Hdr({ view, setView, n, setShowCart, user, onLogin, onLogout }) {
     <header className={"hdr" + (scrolled ? " up" : "")}>
       <div style={{ maxWidth: "100%", margin: "0 auto", padding: "0 16px", height: 60, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <button onClick={() => setView("shop")} style={{ background: "none", border: "none", cursor: "pointer" }}>
-          <span className="brand-title" style={{
-            fontSize: 18,
-            background: "linear-gradient(135deg,#c9a96e,#e8c97a,#b8895a)",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-            backgroundClip: "text"
-          }}>MALLETTE</span>
+          <span className="brand-title brand-logo-text" style={{ fontSize: 18 }}>MALLETTE</span>
         </button>
         <nav style={{ display: "flex", gap: 6, alignItems: "center" }}>
           <button onClick={() => setView("shop")} style={{ padding: "7px 14px", borderRadius: 100, border: "1px solid " + (view === "shop" ? "#1a1612" : "transparent"), background: view === "shop" ? "#1a1612" : "none", color: view === "shop" ? "#faf8f5" : "#78716c", fontSize: 13, cursor: "pointer", fontFamily: "Inter,sans-serif", transition: "all .2s" }}>
@@ -513,17 +507,12 @@ function Shop({ products, onAdd }) {
     <>
       <div className="hero">
         <div className="hero-inner">
-          <h1 className="brand-title fu" style={{
+          <h1 className="brand-title fu hero-title" style={{
             fontSize: "clamp(38px,9vw,108px)",
             letterSpacing: "clamp(.1em,.22em,.3em)",
             lineHeight: 1,
             animationDelay: ".1s",
             display: "block",
-            background: "linear-gradient(135deg,#e8c97a 0%,#f5e6b0 35%,#c9a96e 55%,#f0d890 75%,#b8895a 100%)",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-            backgroundClip: "text",
-            filter: "drop-shadow(0 2px 12px rgba(201,169,110,.35))"
           }}>MALLETTE</h1>
           <div className="fu" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, margin: "18px auto", animationDelay: ".15s" }}>
             <div style={{ width: 40, height: 1, background: "linear-gradient(to right,transparent,#c9a96e)" }}></div>
@@ -636,17 +625,22 @@ function Shop({ products, onAdd }) {
 function AdminLogin({ onLogin }) {
   useEffect(() => {
     const interval = setInterval(() => {
-      if (window.google && document.getElementById("google-signin-btn-container")) {
-        window.google.accounts.id.renderButton(
-          document.getElementById("google-signin-btn-container"),
-          { 
-            theme: "filled_black", 
-            size: "large", 
-            shape: "pill",
-            text: "continue_with", 
-            width: "300" 
-          }
-        );
+      try {
+        if (window.google && window.google.accounts && window.google.accounts.id && document.getElementById("google-signin-btn-container")) {
+          window.google.accounts.id.renderButton(
+            document.getElementById("google-signin-btn-container"),
+            { 
+              theme: "filled_black", 
+              size: "large", 
+              shape: "pill",
+              text: "continue_with", 
+              width: "300" 
+            }
+          );
+          clearInterval(interval);
+        }
+      } catch(e) {
+        console.warn("Error renderizando boton de Google:", e);
         clearInterval(interval);
       }
     }, 100);
@@ -878,33 +872,43 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    // 1. Cargar el script de Google Identity Services
+    // Cargar el script de Google Identity Services
     const script = document.createElement("script");
     script.src = "https://accounts.google.com/gsi/client";
     script.async = true;
     script.defer = true;
     script.onload = () => {
-      if (window.google) {
-        window.google.accounts.id.initialize({
-          client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || "1035959377807-q1ea5qhvi298s8fiiei8ajrdt3f5126s.apps.googleusercontent.com",
-          callback: async (response) => {
-            try {
-              const { data, error } = await supabase.auth.signInWithIdToken({
-                provider: "google",
-                token: response.credential,
-              });
-              if (error) throw error;
-              setView("admin");
-            } catch (err) {
-              console.error("Error al iniciar sesión con Google ID Token:", err.message);
-              alert("Error al iniciar sesión con Google: " + err.message);
-            }
-          },
-          auto_select: false
-        });
-        // Intentar mostrar Google One Tap
-        window.google.accounts.id.prompt();
+      try {
+        if (window.google && window.google.accounts && window.google.accounts.id) {
+          window.google.accounts.id.initialize({
+            client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || "1035959377807-q1ea5qhvi298s8fiiei8ajrdt3f5126s.apps.googleusercontent.com",
+            callback: async (response) => {
+              try {
+                const { data, error } = await supabase.auth.signInWithIdToken({
+                  provider: "google",
+                  token: response.credential,
+                });
+                if (error) throw error;
+                setView("admin");
+              } catch (err) {
+                console.error("Error al iniciar sesión con Google ID Token:", err.message);
+                alert("Error al iniciar sesión con Google: " + err.message);
+              }
+            },
+            auto_select: false
+          });
+          // Solo mostrar One Tap en desktop (iOS Safari lo bloquea en muchos casos)
+          const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+          if (!isIOS) {
+            try { window.google.accounts.id.prompt(); } catch(e) { /* ignorar */ }
+          }
+        }
+      } catch(e) {
+        console.warn("Google Identity Services no disponible:", e);
       }
+    };
+    script.onerror = () => {
+      console.warn("No se pudo cargar Google Identity Services");
     };
     document.body.appendChild(script);
 
