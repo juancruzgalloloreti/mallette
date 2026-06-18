@@ -564,6 +564,19 @@ function Shop({ products, onAdd }) {
 }
 
 function AdminLogin({ onLogin }) {
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (window.google && document.getElementById("google-signin-btn-container")) {
+        window.google.accounts.id.renderButton(
+          document.getElementById("google-signin-btn-container"),
+          { theme: "outline", size: "large", text: "signin_with", width: "300" }
+        );
+        clearInterval(interval);
+      }
+    }, 100);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <div style={{ minHeight: "70vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#faf8f5", padding: 16 }}>
       <div style={{
@@ -585,12 +598,9 @@ function AdminLogin({ onLogin }) {
         <p style={{ fontSize: 13, color: "#5c534a", lineHeight: 1.6, marginBottom: 24 }}>
           Para ingresar al panel de control, por favor inicia sesión utilizando tu cuenta de Google autorizada.
         </p>
-        <button onClick={onLogin} className="bdk" style={{ width: "100%", padding: "13px", fontSize: 13, letterSpacing: ".08em", display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12.24 10.285V14.4h6.887c-.648 2.41-2.519 4.114-5.136 4.114-3.51 0-6.357-2.829-6.357-6.315s2.847-6.314 6.357-6.314c1.587 0 3.03.585 4.14 1.543l3.12-3.09C19.23 2.58 15.93 1.5 12.24 1.5 6.36 1.5 1.5 6.208 1.5 12s4.86 10.5 10.74 10.5c6.14 0 10.21-4.226 10.21-10.214 0-.616-.06-1.2-.17-1.785H12.24z" />
-          </svg>
-          Iniciar sesión con Google
-        </button>
+        <div style={{ display: "flex", justifyContent: "center" }}>
+          <div id="google-signin-btn-container"></div>
+        </div>
       </div>
     </div>
   );
@@ -791,18 +801,48 @@ export default function App() {
     };
   }, []);
 
-  const loginWithGoogle = async () => {
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: window.location.origin
-        }
-      });
-      if (error) throw error;
-    } catch (err) {
-      console.error("Error al iniciar sesión con Google:", err.message);
-      alert("Error al iniciar sesión con Google: " + err.message);
+  useEffect(() => {
+    // 1. Cargar el script de Google Identity Services
+    const script = document.createElement("script");
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+      if (window.google) {
+        window.google.accounts.id.initialize({
+          client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || "1035959377807-q1ea5qhvi298s8fiiei8ajrdt3f5126s.apps.googleusercontent.com",
+          callback: async (response) => {
+            try {
+              const { data, error } = await supabase.auth.signInWithIdToken({
+                provider: "google",
+                token: response.credential,
+              });
+              if (error) throw error;
+              setView("admin");
+            } catch (err) {
+              console.error("Error al iniciar sesión con Google ID Token:", err.message);
+              alert("Error al iniciar sesión con Google: " + err.message);
+            }
+          },
+          auto_select: false
+        });
+        // Intentar mostrar Google One Tap
+        window.google.accounts.id.prompt();
+      }
+    };
+    document.body.appendChild(script);
+
+    return () => {
+      if (document.body.contains(script)) {
+        document.body.removeChild(script);
+      }
+    };
+  }, []);
+
+  const loginWithGoogle = () => {
+    setView("admin");
+    if (window.google) {
+      window.google.accounts.id.prompt();
     }
   };
 
