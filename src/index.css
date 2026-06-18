@@ -112,7 +112,7 @@ html,body{background:#faf8f5;font-family:Inter,sans-serif;color:#1a1612;width:10
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 
 /* Layout components */
-.tabs-wrapper {background:#fff;border-bottom:1px solid #ede8e0;width:100%}
+.tabs-wrapper {background:#fff;border-bottom:1px solid #ede8e0;width:100%;position:sticky;top:60px;z-index:40}
 .tabs-container {padding:0 16px;display:flex}
 .hero-inner {text-align:center;position:relative;z-index:1;padding:80px 16px}
 .shop-section {margin-bottom:48px;background:#faf8f5}
@@ -156,7 +156,7 @@ html,body{background:#faf8f5;font-family:Inter,sans-serif;color:#1a1612;width:10
   color:#faf8f5;
   border:none;
   cursor:pointer;
-  display:none; /* Oculto por defecto en escritorio */
+  display:flex; /* Visible en escritorio también cuando hay items */
   align-items:center;
   justify-content:center;
   box-shadow:0 8px 28px rgba(26,22,18,0.25);
@@ -302,8 +302,7 @@ html,body{background:#faf8f5;font-family:Inter,sans-serif;color:#1a1612;width:10
   .pcard .bdk{padding:6px 0!important;font-size:10px!important}
   .pcard span.cb{font-size:8px!important;padding:2px 8px!important}
   
-  /* Botón de carrito flotante en móvil */
-  .float-cart{display:flex!important}
+  /* Botón de carrito flotante en móvil (ya visible en desktop también) */
   
   /* Ocultar texto de botones en header móvil si la pantalla es muy angosta */
   .hdr-btn-text{display:none!important}
