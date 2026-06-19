@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { supabase } from './supabase'
 
 
+const ADMIN_EMAILS = ["juancruzgalloloreti@gmail.com", "federicolionelgallo@gmail.com"];
+
 const WA = "5491156023250";
 const fmt = n => "$" + Number(n).toLocaleString("es-AR");
 
@@ -182,7 +184,7 @@ function WAF() {
 
 function Hdr({ view, setView, n, setShowCart, user, onLogin, onLogout }) {
   const [scrolled, setScrolled] = useState(false);
-  const isAdmin = user?.email === "juancruzgalloloreti@gmail.com";
+  const isAdmin = user?.email && ADMIN_EMAILS.includes(user.email);
 
   useEffect(() => {
     const h = () => setScrolled(window.scrollY > 40);
@@ -1005,7 +1007,7 @@ export default function App() {
       {view === "shop" && <Shop products={groupedProducts} onAdd={add} />}
       {view === "admin" && (
         user
-          ? (user.email === "juancruzgalloloreti@gmail.com"
+          ? (ADMIN_EMAILS.includes(user.email)
               ? <Admin dbProducts={dbProducts} onUpdateStock={updateStock} onUpdatePrice={updatePrice} />
               : <AdminAccessDenied email={user.email} onLogout={logout} onGoShop={() => setView("shop")} />)
           : <AdminLogin onLogin={loginWithGoogle} />
