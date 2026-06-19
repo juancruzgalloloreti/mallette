@@ -67,7 +67,9 @@ const groupProducts = (dbRows) => {
       c: color === "Único" ? "" : color,
       price: Number(row.precio),
       stock: row.stock,
-      imgs: imgs
+      imgs: imgs,
+      en_rebaja: row.en_rebaja || false,
+      descuento_porcentaje: Number(row.descuento_porcentaje || 0)
     });
   });
   return grouped;
@@ -316,8 +318,11 @@ function Modal({ p, onClose, onAdd, onZoom }) {
   const [added, setAdded] = useState(false);
   const v = p.variants[selV] || p.variants[0];
   
-  const currentPrice = v.price || p.price;
+  const basePrice = v.price || p.price;
   const currentStock = v.stock !== undefined ? v.stock : p.stock;
+  const enRebaja = v.en_rebaja || false;
+  const descuento = v.descuento_porcentaje || 0;
+  const currentPrice = enRebaja ? Math.round(basePrice * (1 - descuento / 100)) : basePrice;
 
   const ha = () => { onAdd(p, v); setAdded(true); setTimeout(() => setAdded(false), 2000); };
   const wm = encodeURIComponent("Hola! Me interesa el Modelo " + p.name + (v.c ? " - " + v.c : "") + " - " + fmt(currentPrice));
@@ -361,7 +366,17 @@ function Modal({ p, onClose, onAdd, onZoom }) {
 
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderTop: "1px solid #f0ebe3", borderBottom: "1px solid #f0ebe3", marginBottom: 16 }}>
                 <span style={{ fontSize: 11, color: "#a09890", letterSpacing: ".06em", textTransform: "uppercase" }}>Precio</span>
-                <span className="serif" style={{ fontSize: 24 }}>{fmt(currentPrice)}</span>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                  {enRebaja ? (
+                    <>
+                      <span style={{ textDecoration: "line-through", color: "#a09890", fontSize: 16 }}>{fmt(basePrice)}</span>
+                      <span className="serif" style={{ fontSize: 24, color: "#b91c1c", fontWeight: 700 }}>{fmt(currentPrice)}</span>
+                      <span style={{ background: "#fef2f2", color: "#b91c1c", fontSize: 11, fontWeight: 700, padding: "2px 6px", borderRadius: 6 }}>{descuento}% OFF</span>
+                    </>
+                  ) : (
+                    <span className="serif" style={{ fontSize: 24 }}>{fmt(currentPrice)}</span>
+                  )}
+                </div>
               </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -387,10 +402,14 @@ function Card({ p, onAdd, onOpen, delay }) {
   const hasColors = p.variants.length > 1 && p.variants[0].c !== "";
   const cover = p.variants[0]?.imgs[0] || "";
   const totalImgs = p.variants.reduce((s, v) => s + v.imgs.length, 0);
-  const price = p.variants[0]?.price || p.price;
-  const stock = p.variants[0]?.stock !== undefined ? p.variants[0].stock : p.stock;
+  const variant = p.variants[0];
+  const price = variant?.price || p.price;
+  const stock = variant?.stock !== undefined ? variant.stock : p.stock;
+  const enRebaja = variant?.en_rebaja || false;
+  const descuento = variant?.descuento_porcentaje || 0;
+  const discountedPrice = enRebaja ? Math.round(price * (1 - descuento / 100)) : price;
 
-  const ha = (e) => { e.stopPropagation(); if (!stock) return; onAdd(p, p.variants[0]); setAdded(true); setTimeout(() => setAdded(false), 1800); };
+  const ha = (e) => { e.stopPropagation(); if (!stock) return; onAdd(p, variant); setAdded(true); setTimeout(() => setAdded(false), 1800); };
   return (
     <div className="pcard fu" style={{ animationDelay: delay * .07 + "s" }} onClick={() => onOpen(p)}>
       <div className="pi">
@@ -405,7 +424,14 @@ function Card({ p, onAdd, onOpen, delay }) {
             {p.variants.length} colores
           </div>
         )}
-        {stock <= 3 && stock > 0 && <div style={{ position: "absolute", top: 10, left: 10, background: "rgba(254,243,199,.95)", color: "#b45309", fontSize: 10, fontWeight: 600, padding: "3px 9px", borderRadius: 100 }}>Ultimas {stock}</div>}
+        {enRebaja && stock > 0 && (
+          <div style={{ position: "absolute", top: 10, left: 10, background: "#b91c1c", color: "#fff", fontSize: 10, fontWeight: 700, padding: "3px 9px", borderRadius: 100, letterSpacing: ".04em" }}>
+            {descuento}% OFF
+          </div>
+        )}
+        {stock <= 3 && stock > 0 && (
+          <div style={{ position: "absolute", top: enRebaja ? 36 : 10, left: 10, background: "rgba(254,243,199,.95)", color: "#b45309", fontSize: 10, fontWeight: 600, padding: "3px 9px", borderRadius: 100 }}>Ultimas {stock}</div>
+        )}
         {stock === 0 && <div style={{ position: "absolute", inset: 0, background: "rgba(250,248,245,.7)", display: "flex", alignItems: "center", justifyContent: "center" }}><span style={{ background: "#1a1612", color: "#faf8f5", fontSize: 11, letterSpacing: ".1em", padding: "8px 18px", borderRadius: 100 }}>SIN STOCK</span></div>}
       </div>
       <div style={{ padding: "12px 14px 14px" }}>
@@ -413,7 +439,16 @@ function Card({ p, onAdd, onOpen, delay }) {
         <h3 className="serif" style={{ fontSize: 17, fontWeight: 400, margin: "5px 0 3px", color: "#1a1612" }}>Modelo {p.name}</h3>
         <p style={{ fontSize: 11, color: "#78716c", marginBottom: 10 }}>{p.style}{hasColors ? " - " + p.variants.map(v => v.c).join(", ") : ""}</p>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <span className="serif" style={{ fontSize: 19, color: "#1a1612" }}>{fmt(price)}</span>
+          <div style={{ display: "flex", alignItems: "baseline", flexWrap: "wrap", gap: 6 }}>
+            {enRebaja ? (
+              <>
+                <span style={{ textDecoration: "line-through", color: "#a09890", fontSize: 14 }}>{fmt(price)}</span>
+                <span className="serif" style={{ fontSize: 19, color: "#b91c1c", fontWeight: 700 }}>{fmt(discountedPrice)}</span>
+              </>
+            ) : (
+              <span className="serif" style={{ fontSize: 19, color: "#1a1612" }}>{fmt(price)}</span>
+            )}
+          </div>
           <button className="bdk" onClick={ha} disabled={!stock}
             style={{ padding: "9px 0", fontSize: 12, width: "100%", background: added ? "#5a7a5a" : !stock ? "#c9c5be" : "#1a1612" }}>
             {added ? "Agregado" : "Agregar al carrito"}
@@ -686,19 +721,24 @@ function ProductEditor({ product, onSave, onCancel }) {
   };
 
   const [form, setForm] = useState({
-    modelo: product.modelo || "",
-    coleccion: product.coleccion || "Capsula Equilibrio",
-    estilo: product.estilo || "",
-    precio: product.precio || "",
-    stock: product.stock !== undefined ? product.stock : "",
-    orden: product.orden !== undefined ? product.orden : "",
-    descripcion: product.descripcion || "",
-    nota: product.nota || "",
-    variantes_de_color: product.variantes_de_color || "Único",
-    images_url: parseImgs(product.images_url),
+    modelo: product?.modelo || "",
+    coleccion: product?.coleccion || "Capsula Equilibrio",
+    estilo: product?.estilo || "",
+    precio: product?.precio || "",
+    stock: product?.stock !== undefined ? product.stock : "",
+    orden: product?.orden !== undefined ? product.orden : "",
+    descripcion: product?.descripcion || "",
+    nota: product?.nota || "",
+    variantes_de_color: product?.variantes_de_color || "Único",
+    images_url: product ? parseImgs(product.images_url) : [],
+    en_rebaja: product?.en_rebaja || false,
+    descuento_porcentaje: product?.descuento_porcentaje || 0
   });
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [newImgUrl, setNewImgUrl] = useState("");
+  const [uploadedInSession, setUploadedInSession] = useState([]);
+  const fileInputRef = useRef(null);
 
   const upd = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -710,9 +750,88 @@ function ProductEditor({ product, onSave, onCancel }) {
   };
   const removeImg = (i) => upd("images_url", form.images_url.filter((_, idx) => idx !== i));
 
+  const handleUploadImage = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const fileExt = file.name.split(".").pop();
+      const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
+      
+      const { data, error } = await supabase.storage
+        .from("fotos")
+        .upload(fileName, file, { cacheControl: "3600", upsert: false });
+        
+      if (error) throw error;
+      
+      const { data: urlData } = supabase.storage
+        .from("fotos")
+        .getPublicUrl(fileName);
+        
+      if (!urlData || !urlData.publicUrl) {
+        throw new Error("No se pudo obtener la URL pública de la imagen");
+      }
+      
+      upd("images_url", [...form.images_url, urlData.publicUrl]);
+      setUploadedInSession(prev => [...prev, urlData.publicUrl]);
+    } catch (err) {
+      console.error("Error al subir imagen:", err);
+      alert("Error al subir imagen: " + (err.message || JSON.stringify(err)));
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleCancel = async () => {
+    if (uploadedInSession.length > 0) {
+      const BUCKET_URL = "https://ioldkkknswpgiblmtnor.supabase.co/storage/v1/object/public/fotos/";
+      const filesToDelete = uploadedInSession
+        .filter(url => url.startsWith(BUCKET_URL))
+        .map(url => url.substring(BUCKET_URL.length));
+        
+      if (filesToDelete.length > 0) {
+        try {
+          await supabase.storage.from("fotos").remove(filesToDelete);
+        } catch (err) {
+          console.error("Error al limpiar fotos huérfanas al cancelar:", err);
+        }
+      }
+    }
+    onCancel();
+  };
+
   const handleSave = async () => {
+    if (!form.modelo.trim()) {
+      alert("El nombre del modelo es obligatorio.");
+      return;
+    }
     setSaving(true);
-    await onSave(product.id, {
+
+    try {
+      // Detectar imágenes que fueron eliminadas en esta edición para borrarlas físicamente de Supabase Storage
+      const BUCKET_URL = "https://ioldkkknswpgiblmtnor.supabase.co/storage/v1/object/public/fotos/";
+      const originalUrls = product ? parseImgs(product.images_url) : [];
+      const allAvailableUrls = [...originalUrls, ...uploadedInSession];
+      const deletedUrls = allAvailableUrls.filter(url => !form.images_url.includes(url));
+      
+      const filesToDelete = deletedUrls
+        .filter(url => url.startsWith(BUCKET_URL))
+        .map(url => url.substring(BUCKET_URL.length));
+        
+      if (filesToDelete.length > 0) {
+        try {
+          const { error } = await supabase.storage.from("fotos").remove(filesToDelete);
+          if (error) console.error("Error al borrar archivos de Storage:", error);
+        } catch (err) {
+          console.error("Error eliminando archivos:", err);
+        }
+      }
+    } catch (err) {
+      console.warn("No se pudo procesar la eliminación de archivos de storage:", err);
+    }
+
+    await onSave(product?.id, {
       modelo: form.modelo.trim(),
       coleccion: form.coleccion,
       estilo: form.estilo.trim(),
@@ -723,6 +842,8 @@ function ProductEditor({ product, onSave, onCancel }) {
       nota: form.nota,
       variantes_de_color: form.variantes_de_color.trim() || "Único",
       images_url: form.images_url,
+      en_rebaja: form.en_rebaja,
+      descuento_porcentaje: Number(form.descuento_porcentaje)
     });
     setSaving(false);
   };
@@ -738,8 +859,10 @@ function ProductEditor({ product, onSave, onCancel }) {
   return (
     <div style={{ background: "#fff", border: "1px solid #ede8e0", borderRadius: 16, padding: "28px 24px", maxWidth: 560, animation: "fU .25s ease" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
-        <h3 style={{ fontSize: 17, fontWeight: 600, color: "#1a1612" }}>Editar producto</h3>
-        <button onClick={onCancel} style={{ background: "none", border: "none", cursor: "pointer", color: "#a09890", fontSize: 20, lineHeight: 1 }}>×</button>
+        <h3 style={{ fontSize: 17, fontWeight: 600, color: "#1a1612" }}>
+          {product ? "Editar producto" : "Crear nuevo producto"}
+        </h3>
+        <button onClick={handleCancel} style={{ background: "none", border: "none", cursor: "pointer", color: "#a09890", fontSize: 20, lineHeight: 1 }}>×</button>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
@@ -783,11 +906,44 @@ function ProductEditor({ product, onSave, onCancel }) {
         <input style={inputStyle} placeholder="Ej: Incluye doble correa y billetera" value={form.nota} onChange={e => upd("nota", e.target.value)} />
       </div>
 
+      {/* Sección de Rebajas */}
+      <div style={{ background: "#faf8f5", border: "1px solid #ede8e0", borderRadius: 12, padding: "14px", marginBottom: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: form.en_rebaja ? 10 : 0 }}>
+          <input 
+            type="checkbox" 
+            id="en_rebaja" 
+            checked={form.en_rebaja} 
+            onChange={e => upd("en_rebaja", e.target.checked)} 
+            style={{ width: 16, height: 16, cursor: "pointer" }} 
+          />
+          <label htmlFor="en_rebaja" style={{ fontSize: 13, fontWeight: 600, color: "#1a1612", cursor: "pointer" }}>
+            Habilitar rebaja (oferta)
+          </label>
+        </div>
+        {form.en_rebaja && (
+          <div style={{ animation: "fU .2s ease" }}>
+            <label style={labelStyle}>Porcentaje de descuento (% OFF)</label>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input 
+                type="number" 
+                min="1" 
+                max="99" 
+                style={{ ...inputStyle, width: 100 }} 
+                value={form.descuento_porcentaje} 
+                onChange={e => upd("descuento_porcentaje", Math.max(0, Math.min(100, Number(e.target.value))))} 
+              />
+              <span style={{ fontSize: 13, color: "#78716c", fontWeight: 500 }}>% de descuento</span>
+            </div>
+          </div>
+        )}
+      </div>
+
       <div style={{ marginBottom: 20 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
           <label style={labelStyle}>Variantes de color e imágenes</label>
         </div>
         <input style={{ ...inputStyle, marginBottom: 10 }} placeholder="Color (dejar vacío si no aplica)" value={form.variantes_de_color === "Único" ? "" : form.variantes_de_color} onChange={e => upd("variantes_de_color", e.target.value || "Único")} />
+        
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
           {form.images_url.map((url, i) => (
             <div key={i} style={{ position: "relative", width: 64, height: 64 }}>
@@ -796,27 +952,42 @@ function ProductEditor({ product, onSave, onCancel }) {
             </div>
           ))}
         </div>
+
+        {/* Subida directa a Supabase Storage */}
+        <div style={{ marginBottom: 10 }}>
+          <input type="file" accept="image/*" ref={fileInputRef} onChange={handleUploadImage} style={{ display: "none" }} />
+          <button 
+            type="button" 
+            onClick={() => fileInputRef.current?.click()} 
+            disabled={uploading} 
+            style={{ width: "100%", padding: "10px", background: "#f0ebe3", border: "1px solid #ddd8d0", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#78716c", fontFamily: "Inter,sans-serif", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
+          >
+            <span>📁</span> {uploading ? "Subiendo..." : "Subir imagen desde la PC"}
+          </button>
+        </div>
+
         <div style={{ display: "flex", gap: 8 }}>
-          <input style={{ ...inputStyle, flex: 1 }} placeholder="URL de imagen (Supabase Storage)" value={newImgUrl} onChange={e => setNewImgUrl(e.target.value)}
+          <input style={{ ...inputStyle, flex: 1 }} placeholder="O pegar URL de imagen externa" value={newImgUrl} onChange={e => setNewImgUrl(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addImg(); } }} />
-          <button onClick={addImg} style={{ padding: "9px 14px", background: "#f0ebe3", border: "1px solid #ddd8d0", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 600, color: "#78716c", whiteSpace: "nowrap", fontFamily: "Inter,sans-serif" }}>+ Agregar</button>
+          <button onClick={addImg} style={{ padding: "9px 14px", background: "#f0ebe3", border: "1px solid #ddd8d0", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 600, color: "#78716c", whiteSpace: "nowrap", fontFamily: "Inter,sans-serif" }}>+ Agregar URL</button>
         </div>
       </div>
 
       <div style={{ display: "flex", gap: 10 }}>
-        <button onClick={handleSave} disabled={saving} className="bdk" style={{ flex: 1, padding: "12px", fontSize: 13 }}>
-          {saving ? "Guardando..." : "Guardar cambios"}
+        <button onClick={handleSave} disabled={saving || uploading} className="bdk" style={{ flex: 1, padding: "12px", fontSize: 13 }}>
+          {saving ? "Guardando..." : product ? "Guardar cambios" : "Crear producto"}
         </button>
-        <button onClick={onCancel} className="bol" style={{ padding: "12px 20px", fontSize: 13 }}>Cancelar</button>
+        <button onClick={handleCancel} className="bol" style={{ padding: "12px 20px", fontSize: 13 }}>Cancelar</button>
       </div>
     </div>
   );
 }
 
 
-function Admin({ dbProducts, onUpdateStock, onUpdatePrice, onUpdateProduct }) {
+function Admin({ dbProducts, onUpdateStock, onUpdatePrice, onUpdateProduct, onCreateProduct }) {
   const [tab, setTab] = useState("stock");
   const [editingId, setEditingId] = useState(null);
+  const [creating, setCreating] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
   
   const ts = dbProducts.reduce((s, p) => s + p.stock, 0);
@@ -828,6 +999,17 @@ function Admin({ dbProducts, onUpdateStock, onUpdatePrice, onUpdateProduct }) {
     await onUpdateProduct(id, data);
     setEditingId(null);
     setSaveMsg("Cambios guardados");
+    setTimeout(() => setSaveMsg(""), 2500);
+  };
+
+  const handleCreateProduct = async (_, data) => {
+    const cleanModel = data.modelo.toLowerCase().trim().replace(/\s+/g, '_');
+    const cleanColor = data.variantes_de_color.toLowerCase().trim().replace(/\s+/g, '_');
+    const newId = `${cleanModel}-${cleanColor}`;
+    
+    await onCreateProduct({ ...data, id: newId });
+    setCreating(false);
+    setSaveMsg("Producto creado");
     setTimeout(() => setSaveMsg(""), 2500);
   };
 
@@ -944,39 +1126,60 @@ function Admin({ dbProducts, onUpdateStock, onUpdatePrice, onUpdateProduct }) {
       )}
       {tab === "productos" && (
         <div>
-          {editingId ? (
+          {creating ? (
+            <ProductEditor
+              product={null}
+              onSave={handleCreateProduct}
+              onCancel={() => setCreating(false)}
+            />
+          ) : editingId ? (
             <ProductEditor
               product={dbProducts.find(p => p.id === editingId)}
               onSave={handleSaveProduct}
               onCancel={() => setEditingId(null)}
             />
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {dbProducts.map(p => {
-                let imgUrl = "";
-                if (Array.isArray(p.images_url) && p.images_url.length > 0) {
-                  imgUrl = p.images_url[0];
-                } else if (typeof p.images_url === "string") {
-                  try { imgUrl = JSON.parse(p.images_url)[0]; } catch(e) { imgUrl = p.images_url; }
-                }
-                if (!imgUrl) imgUrl = "https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=600&auto=format&fit=crop";
-                return (
-                  <div key={p.id} style={{ background: "#fff", border: "1px solid #ede8e0", borderRadius: 12, padding: "12px 16px", display: "flex", alignItems: "center", gap: 14 }}>
-                    <div style={{ width: 48, height: 52, borderRadius: 8, overflow: "hidden", background: "#f7f3ee", flexShrink: 0 }}>
-                      <img src={imgUrl} alt={p.modelo} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <button onClick={() => setCreating(true)} className="bdk" style={{ padding: "10px 20px", fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 15, fontWeight: 700 }}>+</span> Nuevo Producto
+                </button>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {dbProducts.map(p => {
+                  let imgUrl = "";
+                  if (Array.isArray(p.images_url) && p.images_url.length > 0) {
+                    imgUrl = p.images_url[0];
+                  } else if (typeof p.images_url === "string") {
+                    try { imgUrl = JSON.parse(p.images_url)[0]; } catch(e) { imgUrl = p.images_url; }
+                  }
+                  if (!imgUrl) imgUrl = "https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=600&auto=format&fit=crop";
+                  const priceLabel = p.en_rebaja 
+                    ? `${fmt(Math.round(p.precio * (1 - (p.descuento_porcentaje || 0) / 100)))}` 
+                    : fmt(p.precio);
+                  return (
+                    <div key={p.id} style={{ background: "#fff", border: "1px solid #ede8e0", borderRadius: 12, padding: "12px 16px", display: "flex", alignItems: "center", gap: 14 }}>
+                      <div style={{ width: 48, height: 52, borderRadius: 8, overflow: "hidden", background: "#f7f3ee", flexShrink: 0 }}>
+                        <img src={imgUrl} alt={p.modelo} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontWeight: 600, fontSize: 14, color: "#1a1612", marginBottom: 2 }}>
+                          {p.modelo} {p.en_rebaja && <span style={{ background: "#fee2e2", color: "#b91c1c", fontSize: 10, padding: "2px 6px", borderRadius: 6, marginLeft: 6, fontWeight: 700 }}>{p.descuento_porcentaje}% OFF</span>}
+                        </p>
+                        <p style={{ fontSize: 12, color: "#a09890" }}>{p.coleccion} · {p.estilo} {p.variantes_de_color !== "Único" ? `· ${p.variantes_de_color}` : ""}</p>
+                      </div>
+                      <div style={{ textAlign: "right", flexShrink: 0 }}>
+                        <p style={{ fontWeight: 600, fontSize: 14, color: p.en_rebaja ? "#b91c1c" : "#1a1612", marginBottom: 4 }}>
+                          {priceLabel}
+                          {p.en_rebaja && <span style={{ fontSize: 11, textDecoration: "line-through", color: "#a09890", marginLeft: 6, fontWeight: 400 }}>{fmt(p.precio)}</span>}
+                        </p>
+                        <p style={{ fontSize: 11, color: "#a09890" }}>Stock: {p.stock}</p>
+                      </div>
+                      <button onClick={() => setEditingId(p.id)} className="bol" style={{ padding: "8px 16px", fontSize: 12, flexShrink: 0, marginLeft: 8 }}>Editar</button>
                     </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontWeight: 600, fontSize: 14, color: "#1a1612", marginBottom: 2 }}>{p.modelo}</p>
-                      <p style={{ fontSize: 12, color: "#a09890" }}>{p.coleccion} · {p.estilo} {p.variantes_de_color !== "Único" ? `· ${p.variantes_de_color}` : ""}</p>
-                    </div>
-                    <div style={{ textAlign: "right", flexShrink: 0 }}>
-                      <p style={{ fontWeight: 600, fontSize: 14, color: "#1a1612", marginBottom: 4 }}>{fmt(p.precio)}</p>
-                      <p style={{ fontSize: 11, color: "#a09890" }}>Stock: {p.stock}</p>
-                    </div>
-                    <button onClick={() => setEditingId(p.id)} className="bol" style={{ padding: "8px 16px", fontSize: 12, flexShrink: 0, marginLeft: 8 }}>Editar</button>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
@@ -1107,6 +1310,7 @@ export default function App() {
       if (error) throw error;
     } catch (err) {
       console.error("Error actualizando stock en Supabase:", err);
+      alert("Error al actualizar el stock en Supabase: " + (err.message || JSON.stringify(err)));
       fetchProducts();
     }
   };
@@ -1119,6 +1323,7 @@ export default function App() {
       if (error) throw error;
     } catch (err) {
       console.error("Error actualizando precio en Supabase:", err);
+      alert("Error al actualizar el precio en Supabase: " + (err.message || JSON.stringify(err)));
       fetchProducts();
     }
   };
@@ -1130,6 +1335,23 @@ export default function App() {
       if (error) throw error;
     } catch (err) {
       console.error("Error actualizando producto en Supabase:", err);
+      alert("Error al guardar cambios en Supabase: " + (err.message || JSON.stringify(err)));
+      fetchProducts();
+    }
+  };
+
+  const createProduct = async (data) => {
+    try {
+      const { data: insertedData, error } = await supabase.from("products").insert([data]).select();
+      if (error) throw error;
+      if (insertedData && insertedData.length > 0) {
+        setDbProducts(prev => [...prev, insertedData[0]]);
+      } else {
+        await fetchProducts();
+      }
+    } catch (err) {
+      console.error("Error creando producto en Supabase:", err);
+      alert("Error al crear el producto en Supabase: " + (err.message || JSON.stringify(err)));
       fetchProducts();
     }
   };
@@ -1138,11 +1360,13 @@ export default function App() {
     const img = variant.imgs[0];
     const vc = variant.c || "";
     const rowId = variant.id;
+    const basePrice = variant.price;
+    const finalPrice = variant.en_rebaja ? Math.round(basePrice * (1 - (variant.descuento_porcentaje || 0) / 100)) : basePrice;
     setCart(prev => {
       const ex = prev.find(c => c.dbId === rowId);
       return ex
         ? prev.map(c => c.dbId === rowId ? { ...c, qty: c.qty + 1 } : c)
-        : [...prev, { dbId: rowId, id: product.id, name: product.name, style: product.style, price: variant.price, img, vc, qty: 1 }];
+        : [...prev, { dbId: rowId, id: product.id, name: product.name, style: product.style, price: finalPrice, img, vc, qty: 1 }];
     });
   };
 
@@ -1180,7 +1404,7 @@ export default function App() {
       {view === "admin" && (
         user
           ? (ADMIN_EMAILS.includes(user.email)
-              ? <Admin dbProducts={dbProducts} onUpdateStock={updateStock} onUpdatePrice={updatePrice} onUpdateProduct={updateProduct} />
+              ? <Admin dbProducts={dbProducts} onUpdateStock={updateStock} onUpdatePrice={updatePrice} onUpdateProduct={updateProduct} onCreateProduct={createProduct} />
               : null)
           : <AdminLogin onLogin={loginWithGoogle} />
       )}
