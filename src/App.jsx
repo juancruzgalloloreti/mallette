@@ -678,51 +678,167 @@ function AdminLogin({ onLogin }) {
   );
 }
 
-function AdminAccessDenied({ email, onLogout, onGoShop }) {
+function ProductEditor({ product, onSave, onCancel }) {
+  const parseImgs = (raw) => {
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw;
+    try { return JSON.parse(raw); } catch { return [raw]; }
+  };
+
+  const [form, setForm] = useState({
+    modelo: product.modelo || "",
+    coleccion: product.coleccion || "Capsula Equilibrio",
+    estilo: product.estilo || "",
+    precio: product.precio || "",
+    stock: product.stock !== undefined ? product.stock : "",
+    orden: product.orden !== undefined ? product.orden : "",
+    descripcion: product.descripcion || "",
+    nota: product.nota || "",
+    variantes_de_color: product.variantes_de_color || "Único",
+    images_url: parseImgs(product.images_url),
+  });
+  const [saving, setSaving] = useState(false);
+  const [newImgUrl, setNewImgUrl] = useState("");
+
+  const upd = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const addImg = () => {
+    const url = newImgUrl.trim();
+    if (!url) return;
+    upd("images_url", [...form.images_url, url]);
+    setNewImgUrl("");
+  };
+  const removeImg = (i) => upd("images_url", form.images_url.filter((_, idx) => idx !== i));
+
+  const handleSave = async () => {
+    setSaving(true);
+    await onSave(product.id, {
+      modelo: form.modelo.trim(),
+      coleccion: form.coleccion,
+      estilo: form.estilo.trim(),
+      precio: Number(form.precio),
+      stock: Number(form.stock),
+      orden: Number(form.orden),
+      descripcion: form.descripcion,
+      nota: form.nota,
+      variantes_de_color: form.variantes_de_color.trim() || "Único",
+      images_url: form.images_url,
+    });
+    setSaving(false);
+  };
+
+  const inputStyle = {
+    width: "100%", padding: "9px 12px", border: "1px solid #ddd8d0",
+    borderRadius: 8, fontFamily: "Inter,sans-serif", fontSize: 13,
+    background: "#fff", outline: "none", color: "#1a1612",
+    boxSizing: "border-box"
+  };
+  const labelStyle = { fontSize: 11, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "#78716c", marginBottom: 5, display: "block" };
+
   return (
-    <div style={{ minHeight: "70vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#faf8f5", padding: 16 }}>
-      <div style={{
-        background: "#fff",
-        borderRadius: 24,
-        padding: "48px 40px",
-        width: "100%",
-        maxWidth: 420,
-        border: "1px solid #fca5a5",
-        boxShadow: "0 20px 60px rgba(220,38,38,.05)",
-        textAlign: "center",
-        animation: "fU .4s ease"
-      }}>
-        <div style={{ width: 48, height: 48, background: "#fef2f2", color: "#ef4444", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, margin: "0 auto 20px", fontWeight: "bold" }}>!</div>
-        <h2 className="serif" style={{ fontSize: 20, color: "#1a1612", marginBottom: 12 }}>Acceso Restringido</h2>
-        <p style={{ fontSize: 13, color: "#78716c", lineHeight: 1.6, marginBottom: 24 }}>
-          El panel de administración es de uso exclusivo. Tu cuenta actual (<strong>{email}</strong>) no tiene permisos de acceso.
-        </p>
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <button onClick={onGoShop} className="bdk" style={{ width: "100%", padding: "12px", fontSize: 13 }}>
-            Volver a la Tienda
-          </button>
-          <button onClick={onLogout} className="bol" style={{ width: "100%", padding: "11px", fontSize: 13 }}>
-            Cerrar Sesión
-          </button>
+    <div style={{ background: "#fff", border: "1px solid #ede8e0", borderRadius: 16, padding: "28px 24px", maxWidth: 560, animation: "fU .25s ease" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
+        <h3 style={{ fontSize: 17, fontWeight: 600, color: "#1a1612" }}>Editar producto</h3>
+        <button onClick={onCancel} style={{ background: "none", border: "none", cursor: "pointer", color: "#a09890", fontSize: 20, lineHeight: 1 }}>×</button>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+        <div>
+          <label style={labelStyle}>Nombre</label>
+          <input style={inputStyle} value={form.modelo} onChange={e => upd("modelo", e.target.value)} />
         </div>
+        <div>
+          <label style={labelStyle}>Colección</label>
+          <select style={{ ...inputStyle }} value={form.coleccion} onChange={e => upd("coleccion", e.target.value)}>
+            <option>Capsula Equilibrio</option>
+            <option>Coleccion Sirio</option>
+            <option>Cuero Argentino</option>
+          </select>
+        </div>
+        <div>
+          <label style={labelStyle}>Estilo</label>
+          <input style={inputStyle} value={form.estilo} onChange={e => upd("estilo", e.target.value)} />
+        </div>
+        <div>
+          <label style={labelStyle}>Precio</label>
+          <input style={inputStyle} type="number" value={form.precio} onChange={e => upd("precio", e.target.value)} />
+        </div>
+        <div>
+          <label style={labelStyle}>Stock inicial</label>
+          <input style={inputStyle} type="number" value={form.stock} onChange={e => upd("stock", e.target.value)} />
+        </div>
+        <div>
+          <label style={labelStyle}>Orden</label>
+          <input style={inputStyle} type="number" value={form.orden} onChange={e => upd("orden", e.target.value)} />
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 14 }}>
+        <label style={labelStyle}>Descripción</label>
+        <textarea style={{ ...inputStyle, minHeight: 80, resize: "vertical" }} value={form.descripcion} onChange={e => upd("descripcion", e.target.value)} />
+      </div>
+
+      <div style={{ marginBottom: 14 }}>
+        <label style={labelStyle}>Nota adicional (opcional)</label>
+        <input style={inputStyle} placeholder="Ej: Incluye doble correa y billetera" value={form.nota} onChange={e => upd("nota", e.target.value)} />
+      </div>
+
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <label style={labelStyle}>Variantes de color e imágenes</label>
+        </div>
+        <input style={{ ...inputStyle, marginBottom: 10 }} placeholder="Color (dejar vacío si no aplica)" value={form.variantes_de_color === "Único" ? "" : form.variantes_de_color} onChange={e => upd("variantes_de_color", e.target.value || "Único")} />
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+          {form.images_url.map((url, i) => (
+            <div key={i} style={{ position: "relative", width: 64, height: 64 }}>
+              <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 8, border: "1px solid #ede8e0" }} />
+              <button onClick={() => removeImg(i)} style={{ position: "absolute", top: -6, right: -6, width: 18, height: 18, borderRadius: "50%", background: "#ef4444", border: "none", cursor: "pointer", color: "#fff", fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, lineHeight: 1 }}>×</button>
+            </div>
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <input style={{ ...inputStyle, flex: 1 }} placeholder="URL de imagen (Supabase Storage)" value={newImgUrl} onChange={e => setNewImgUrl(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addImg(); } }} />
+          <button onClick={addImg} style={{ padding: "9px 14px", background: "#f0ebe3", border: "1px solid #ddd8d0", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 600, color: "#78716c", whiteSpace: "nowrap", fontFamily: "Inter,sans-serif" }}>+ Agregar</button>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 10 }}>
+        <button onClick={handleSave} disabled={saving} className="bdk" style={{ flex: 1, padding: "12px", fontSize: 13 }}>
+          {saving ? "Guardando..." : "Guardar cambios"}
+        </button>
+        <button onClick={onCancel} className="bol" style={{ padding: "12px 20px", fontSize: 13 }}>Cancelar</button>
       </div>
     </div>
   );
 }
 
-function Admin({ dbProducts, onUpdateStock, onUpdatePrice }) {
+
+function Admin({ dbProducts, onUpdateStock, onUpdatePrice, onUpdateProduct }) {
   const [tab, setTab] = useState("stock");
+  const [editingId, setEditingId] = useState(null);
+  const [saveMsg, setSaveMsg] = useState("");
   
   const ts = dbProducts.reduce((s, p) => s + p.stock, 0);
   const lo = dbProducts.filter(p => p.stock > 0 && p.stock <= 3).length;
   const no = dbProducts.filter(p => p.stock === 0).length;
   const tv = dbProducts.reduce((s, p) => s + Number(p.precio) * p.stock, 0);
 
+  const handleSaveProduct = async (id, data) => {
+    await onUpdateProduct(id, data);
+    setEditingId(null);
+    setSaveMsg("Cambios guardados");
+    setTimeout(() => setSaveMsg(""), 2500);
+  };
+
   return (
     <div style={{ maxWidth: "100%", padding: "32px 16px 80px" }}>
-      <div style={{ marginBottom: 24 }}>
-        <h2 className="serif" style={{ fontSize: 24, fontWeight: 400 }}>Panel de Administracion</h2>
-        <p style={{ fontSize: 13, color: "#a09890", marginTop: 4 }}>MALLETTE - Catalogo y stock</p>
+      <div style={{ marginBottom: 24, display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
+        <div>
+          <h2 className="serif" style={{ fontSize: 24, fontWeight: 400 }}>Panel de Administracion</h2>
+          <p style={{ fontSize: 13, color: "#a09890", marginTop: 4 }}>MALLETTE - Catalogo y stock</p>
+        </div>
+        {saveMsg && <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, padding: "8px 16px", fontSize: 13, color: "#15803d", fontWeight: 500 }}>✓ {saveMsg}</div>}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(140px,1fr))", gap: 12, marginBottom: 24 }}>
         {[
@@ -739,8 +855,12 @@ function Admin({ dbProducts, onUpdateStock, onUpdatePrice }) {
           </div>
         ))}
       </div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
-        {["stock", "prices"].map(t => <button key={t} className={"ch " + (tab === t ? "con" : "cof")} onClick={() => setTab(t)}>{t === "stock" ? "Control de Stock" : "Editar Precios"}</button>)}
+      <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+        {["stock", "prices", "productos"].map(t => (
+          <button key={t} className={"ch " + (tab === t ? "con" : "cof")} onClick={() => { setTab(t); setEditingId(null); }}>
+            {t === "stock" ? "Control de Stock" : t === "prices" ? "Editar Precios" : "Productos"}
+          </button>
+        ))}
       </div>
       {tab === "stock" && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: 12 }}>
@@ -820,6 +940,45 @@ function Admin({ dbProducts, onUpdateStock, onUpdatePrice }) {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+      {tab === "productos" && (
+        <div>
+          {editingId ? (
+            <ProductEditor
+              product={dbProducts.find(p => p.id === editingId)}
+              onSave={handleSaveProduct}
+              onCancel={() => setEditingId(null)}
+            />
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {dbProducts.map(p => {
+                let imgUrl = "";
+                if (Array.isArray(p.images_url) && p.images_url.length > 0) {
+                  imgUrl = p.images_url[0];
+                } else if (typeof p.images_url === "string") {
+                  try { imgUrl = JSON.parse(p.images_url)[0]; } catch(e) { imgUrl = p.images_url; }
+                }
+                if (!imgUrl) imgUrl = "https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=600&auto=format&fit=crop";
+                return (
+                  <div key={p.id} style={{ background: "#fff", border: "1px solid #ede8e0", borderRadius: 12, padding: "12px 16px", display: "flex", alignItems: "center", gap: 14 }}>
+                    <div style={{ width: 48, height: 52, borderRadius: 8, overflow: "hidden", background: "#f7f3ee", flexShrink: 0 }}>
+                      <img src={imgUrl} alt={p.modelo} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontWeight: 600, fontSize: 14, color: "#1a1612", marginBottom: 2 }}>{p.modelo}</p>
+                      <p style={{ fontSize: 12, color: "#a09890" }}>{p.coleccion} · {p.estilo} {p.variantes_de_color !== "Único" ? `· ${p.variantes_de_color}` : ""}</p>
+                    </div>
+                    <div style={{ textAlign: "right", flexShrink: 0 }}>
+                      <p style={{ fontWeight: 600, fontSize: 14, color: "#1a1612", marginBottom: 4 }}>{fmt(p.precio)}</p>
+                      <p style={{ fontSize: 11, color: "#a09890" }}>Stock: {p.stock}</p>
+                    </div>
+                    <button onClick={() => setEditingId(p.id)} className="bol" style={{ padding: "8px 16px", fontSize: 12, flexShrink: 0, marginLeft: 8 }}>Editar</button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -964,6 +1123,17 @@ export default function App() {
     }
   };
 
+  const updateProduct = async (id, data) => {
+    setDbProducts(prev => prev.map(p => p.id === id ? { ...p, ...data } : p));
+    try {
+      const { error } = await supabase.from("products").update(data).eq("id", id);
+      if (error) throw error;
+    } catch (err) {
+      console.error("Error actualizando producto en Supabase:", err);
+      fetchProducts();
+    }
+  };
+
   const add = (product, variant) => {
     const img = variant.imgs[0];
     const vc = variant.c || "";
@@ -1005,11 +1175,13 @@ export default function App() {
     <div style={{ minHeight: "100vh", background: "#faf8f5" }}>
       <Hdr view={view} setView={setView} n={n} setShowCart={setShowCart} user={user} onLogin={loginWithGoogle} onLogout={logout} />
       {view === "shop" && <Shop products={groupedProducts} onAdd={add} />}
+{/* Auto-redirigir si usuario logueado no es admin */}
+      {view === "admin" && user && !ADMIN_EMAILS.includes(user.email) && (() => { setTimeout(() => setView("shop"), 0); return null; })()}
       {view === "admin" && (
         user
           ? (ADMIN_EMAILS.includes(user.email)
-              ? <Admin dbProducts={dbProducts} onUpdateStock={updateStock} onUpdatePrice={updatePrice} />
-              : <AdminAccessDenied email={user.email} onLogout={logout} onGoShop={() => setView("shop")} />)
+              ? <Admin dbProducts={dbProducts} onUpdateStock={updateStock} onUpdatePrice={updatePrice} onUpdateProduct={updateProduct} />
+              : null)
           : <AdminLogin onLogin={loginWithGoogle} />
       )}
       {showCart && <CartDrawer cart={cart} setCart={setCart} onClose={() => setShowCart(false)} />}
