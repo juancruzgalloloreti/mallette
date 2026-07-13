@@ -7,21 +7,37 @@ const ADMIN_EMAILS = ["juancruzgalloloreti@gmail.com", "federicolionelgallo@gmai
 const WA = "5491156023250";
 const fmt = n => "$" + Number(n).toLocaleString("es-AR");
 
-const COLS = [
+const DEFAULT_COLS = [
   { id: "equilibrio", name: "Capsula Equilibrio", desc: "Diseno sereno y equilibrado. Piezas artesanales que acompanan cada momento con elegancia natural." },
   { id: "sirio", name: "Coleccion Sirio", desc: "Estructuradas y con personalidad. Elegancia contemporanea para cada ocasion." },
   { id: "cuero", name: "Cuero Argentino", desc: "Lo mejor del cuero nacional. Piezas artesanales premium hechas para durar toda la vida." },
 ];
 
-const getCollectionId = (name) => {
+// Paleta rotativa de colores para colecciones dinámicas
+const COL_PALETTE = ["cbe", "cbs", "cbc", "cbd", "cbf", "cbg2", "cbh", "cbi"];
+
+// Devuelve la clase CSS del badge según índice de la colección en el array
+const getColBadgeClass = (colId, colsList) => {
+  const idx = (colsList || COLS).findIndex(c => c.id === colId);
+  return COL_PALETTE[Math.max(0, idx) % COL_PALETTE.length];
+};
+
+// Se reemplaza en runtime con colecciones de Supabase; este array es solo el fallback
+let COLS = DEFAULT_COLS;
+
+const getCollectionId = (name, cols) => {
+  const list = cols || COLS;
+  const found = list.find(c => c.name === name);
+  if (found) return found.id;
+  // Fallback legacy
   if (name === "Capsula Equilibrio") return "equilibrio";
   if (name === "Coleccion Sirio") return "sirio";
   if (name === "Cuero Argentino") return "cuero";
-  return "equilibrio";
+  return list[0]?.id || "equilibrio";
 };
 
 // Agrupa las variantes de la BD en productos únicos para el frontend
-const groupProducts = (dbRows) => {
+const groupProducts = (dbRows, cols) => {
   const grouped = [];
   const map = {};
   dbRows.forEach(row => {
@@ -32,7 +48,7 @@ const groupProducts = (dbRows) => {
       map[modelName] = {
         id: baseId,
         name: modelName,
-        col: getCollectionId(row.coleccion),
+        col: getCollectionId(row.coleccion, cols),
         style: row.estilo,
         price: Number(row.precio),
         stock: row.stock,
@@ -310,9 +326,10 @@ function CartDrawer({ cart, setCart, onClose }) {
   );
 }
 
-function Modal({ p, onClose, onAdd, onZoom }) {
-  const col = COLS.find(c => c.id === p.col);
-  const cbg = { equilibrio: "cbe", sirio: "cbs", cuero: "cbc" };
+function Modal({ p, onClose, onAdd, onZoom, collections }) {
+  const colsList = collections && collections.length > 0 ? collections : COLS;
+  const col = colsList.find(c => c.id === p.col);
+  const badgeClass = getColBadgeClass(p.col, colsList);
   const hasColors = p.variants.length > 1 && p.variants[0].c !== "";
   const [selV, setSelV] = useState(0);
   const [added, setAdded] = useState(false);
@@ -325,7 +342,7 @@ function Modal({ p, onClose, onAdd, onZoom }) {
   const currentPrice = enRebaja ? Math.round(basePrice * (1 - descuento / 100)) : basePrice;
 
   const ha = () => { onAdd(p, v); setAdded(true); setTimeout(() => setAdded(false), 2000); };
-  const wm = encodeURIComponent("Hola! Me interesa el Modelo " + p.name + (v.c ? " - " + v.c : "") + " - " + fmt(currentPrice));
+  const wm = encodeURIComponent("Hola! Me interesa: " + p.name + (v.c ? " - " + v.c : "") + " - " + fmt(currentPrice));
   
   return (
     <div className="mb" onClick={onClose}>
@@ -335,10 +352,10 @@ function Modal({ p, onClose, onAdd, onZoom }) {
           <div className="modal-info-side">
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-                <span className={"cb " + cbg[p.col]}>{col?.name}</span>
+                <span className={"cb " + badgeClass}>{col?.name}</span>
                 <button onClick={onClose} style={{ width: 44, height: 44, borderRadius: "50%", padding: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 700, background: "#1a1612", color: "#fff", border: "none", cursor: "pointer", flexShrink: 0 }}>x</button>
               </div>
-              <h2 className="serif" style={{ fontSize: 26, fontWeight: 400, marginBottom: 4 }}>Modelo {p.name}</h2>
+              <h2 className="serif" style={{ fontSize: 26, fontWeight: 400, marginBottom: 4 }}>{p.name}</h2>
               <p style={{ fontSize: 12, color: "#a09890", marginBottom: 14 }}>{p.style}</p>
               <p style={{ fontSize: 13, color: "#5c534a", lineHeight: 1.75, marginBottom: 14, whiteSpace: "pre-line" }}>{p.desc?.replace(/\\n/g, "\n")}</p>
               {p.note && <div style={{ background: "#f0ebe3", borderRadius: 10, padding: "9px 14px", marginBottom: 12, fontSize: 12, color: "#8b6914", fontWeight: 500 }}>* {p.note}</div>}
@@ -396,9 +413,10 @@ function Modal({ p, onClose, onAdd, onZoom }) {
   );
 }
 
-function Card({ p, onAdd, onOpen, delay }) {
+function Card({ p, onAdd, onOpen, delay, collections }) {
   const [added, setAdded] = useState(false);
-  const cbg = { equilibrio: "cbe", sirio: "cbs", cuero: "cbc" };
+  const colsList = collections && collections.length > 0 ? collections : COLS;
+  const badgeClass = getColBadgeClass(p.col, colsList);
   const hasColors = p.variants.length > 1 && p.variants[0].c !== "";
   const cover = p.variants[0]?.imgs[0] || "";
   const totalImgs = p.variants.reduce((s, v) => s + v.imgs.length, 0);
@@ -435,8 +453,8 @@ function Card({ p, onAdd, onOpen, delay }) {
         {stock === 0 && <div style={{ position: "absolute", inset: 0, background: "rgba(250,248,245,.7)", display: "flex", alignItems: "center", justifyContent: "center" }}><span style={{ background: "#1a1612", color: "#faf8f5", fontSize: 11, letterSpacing: ".1em", padding: "8px 18px", borderRadius: 100 }}>SIN STOCK</span></div>}
       </div>
       <div style={{ padding: "12px 14px 14px" }}>
-        <span className={"cb " + cbg[p.col]} style={{ marginBottom: 6, display: "inline-block" }}>{COLS.find(c => c.id === p.col)?.name.split(" ").pop()}</span>
-        <h3 className="serif" style={{ fontSize: 17, fontWeight: 400, margin: "5px 0 3px", color: "#1a1612" }}>Modelo {p.name}</h3>
+        <span className={"cb " + badgeClass} style={{ marginBottom: 6, display: "inline-block" }}>{colsList.find(c => c.id === p.col)?.name.split(" ").pop() || p.col}</span>
+        <h3 className="serif" style={{ fontSize: 17, fontWeight: 400, margin: "5px 0 3px", color: "#1a1612" }}>{p.name}</h3>
         <p style={{ fontSize: 11, color: "#78716c", marginBottom: 10 }}>{p.style}{hasColors ? " - " + p.variants.map(v => v.c).join(", ") : ""}</p>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <div style={{ display: "flex", alignItems: "baseline", flexWrap: "wrap", gap: 6 }}>
@@ -526,7 +544,8 @@ function Cuidados() {
   );
 }
 
-function Shop({ products, onAdd }) {
+function Shop({ products, onAdd, collections }) {
+  const COLS = collections && collections.length > 0 ? collections : DEFAULT_COLS;
   const [filter, setFilter] = useState("Todas");
   const [search, setSearch] = useState("");
   const [detail, setDetail] = useState(null);
@@ -586,7 +605,7 @@ function Shop({ products, onAdd }) {
               <p style={{ fontSize: 13, color: "#78716c", marginTop: 5, maxWidth: 480 }}>{col.desc}</p>
             </div>
             <div className="grid-products" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: 18 }}>
-              {items.map((p, i) => <Card key={p.id} p={p} onAdd={onAdd} onOpen={setDetail} delay={i} />)}
+              {items.map((p, i) => <Card key={p.id} p={p} onAdd={onAdd} onOpen={setDetail} delay={i} collections={COLS} />)}
             </div>
           </div>
         ))}
@@ -653,7 +672,7 @@ function Shop({ products, onAdd }) {
       <FAQ />
       <Cuidados />
 
-      {detail && <Modal p={detail} onClose={() => setDetail(null)} onAdd={onAdd} onZoom={img => setFsImg(img)} />}
+      {detail && <Modal p={detail} onClose={() => setDetail(null)} onAdd={onAdd} onZoom={img => setFsImg(img)} collections={COLS} />}
       {fsImg && <div className="fso" onClick={() => setFsImg(null)}><img src={fsImg} className="fsi" alt="" /><button className="fsc" onClick={() => setFsImg(null)}>x</button></div>}
     </>
   );
@@ -713,7 +732,77 @@ function AdminLogin({ onLogin }) {
   );
 }
 
-function ProductEditor({ product, onSave, onCancel }) {
+// ─── Modal de Nueva / Editar Colección ────────────────────────────────────────
+function CollectionEditor({ onSave, onCancel, collection }) {
+  const [form, setForm] = useState({
+    name: collection?.name || "",
+    desc: collection?.desc || ""
+  });
+  const [saving, setSaving] = useState(false);
+
+  const inputStyle = {
+    width: "100%", padding: "9px 12px", border: "1px solid #ddd8d0",
+    borderRadius: 8, fontFamily: "Inter,sans-serif", fontSize: 13,
+    background: "#fff", outline: "none", color: "#1a1612",
+    boxSizing: "border-box"
+  };
+  const labelStyle = { fontSize: 11, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "#78716c", marginBottom: 5, display: "block" };
+
+  const handleSave = async () => {
+    if (!form.name.trim()) { alert("El nombre de la colección es obligatorio."); return; }
+    setSaving(true);
+    const id = form.name.toLowerCase().trim().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+    if (collection) {
+      await onSave(collection.name, collection.id, form.name.trim(), form.desc.trim());
+    } else {
+      await onSave({ id, name: form.name.trim(), desc: form.desc.trim() });
+    }
+    setSaving(false);
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(26,22,18,0.55)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+      onClick={onCancel}>
+      <div style={{ background: "#fff", borderRadius: 20, padding: "32px 28px", width: "100%", maxWidth: 480, animation: "fU .25s ease", boxShadow: "0 20px 60px rgba(0,0,0,.18)" }}
+        onClick={e => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+          <h3 style={{ fontSize: 18, fontWeight: 600, color: "#1a1612" }}>
+            {collection ? "Editar Colección" : "Nueva Colección"}
+          </h3>
+          <button onClick={onCancel} style={{ background: "none", border: "none", cursor: "pointer", color: "#a09890", fontSize: 22, lineHeight: 1 }}>×</button>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div>
+            <label style={labelStyle}>Nombre de la colección</label>
+            <input style={inputStyle} placeholder="Ej: Verano 2026" value={form.name}
+              onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+          </div>
+          <div>
+            <label style={labelStyle}>Descripción</label>
+            <textarea style={{ ...inputStyle, minHeight: 80, resize: "vertical" }}
+              placeholder="Breve descripción de la colección..."
+              value={form.desc} onChange={e => setForm(f => ({ ...f, desc: e.target.value }))} />
+          </div>
+          <div style={{ background: "#f5f0e8", borderRadius: 10, padding: "10px 14px" }}>
+            <p style={{ fontSize: 12, color: "#78716c" }}>
+              <strong style={{ color: "#c9a96e" }}>ID generado: </strong>
+              {form.name ? form.name.toLowerCase().trim().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') : <em>ingresá un nombre</em>}
+            </p>
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
+          <button onClick={handleSave} disabled={saving} className="bdk" style={{ flex: 1, padding: "12px", fontSize: 13 }}>
+            {saving ? "Guardando..." : collection ? "Guardar cambios" : "Crear colección"}
+          </button>
+          <button onClick={onCancel} className="bol" style={{ padding: "12px 20px", fontSize: 13 }}>Cancelar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Editor de Producto ───────────────────────────────────────────────────────
+function ProductEditor({ product, onSave, onCancel, collections }) {
   const parseImgs = (raw) => {
     if (!raw) return [];
     if (Array.isArray(raw)) return raw;
@@ -873,9 +962,9 @@ function ProductEditor({ product, onSave, onCancel }) {
         <div>
           <label style={labelStyle}>Colección</label>
           <select style={{ ...inputStyle }} value={form.coleccion} onChange={e => upd("coleccion", e.target.value)}>
-            <option>Capsula Equilibrio</option>
-            <option>Coleccion Sirio</option>
-            <option>Cuero Argentino</option>
+            {(collections && collections.length > 0 ? collections : DEFAULT_COLS).map(c => (
+              <option key={c.id} value={c.name}>{c.name}</option>
+            ))}
           </select>
         </div>
         <div>
@@ -943,6 +1032,9 @@ function ProductEditor({ product, onSave, onCancel }) {
           <label style={labelStyle}>Variantes de color e imágenes</label>
         </div>
         <input style={{ ...inputStyle, marginBottom: 10 }} placeholder="Color (dejar vacío si no aplica)" value={form.variantes_de_color === "Único" ? "" : form.variantes_de_color} onChange={e => upd("variantes_de_color", e.target.value || "Único")} />
+        <p style={{ fontSize: 11, color: "#a09890", marginTop: -6, marginBottom: 14, lineHeight: 1.4 }}>
+          💡 Para crear múltiples colores para un mismo modelo (como Camel y Bordo en Simona), creá un producto separado para cada color usando siempre el mismo <strong>Nombre</strong>.
+        </p>
         
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
           {form.images_url.map((url, i) => (
@@ -984,10 +1076,12 @@ function ProductEditor({ product, onSave, onCancel }) {
 }
 
 
-function Admin({ dbProducts, onUpdateStock, onUpdatePrice, onUpdateProduct, onCreateProduct }) {
+function Admin({ dbProducts, onUpdateStock, onUpdatePrice, onUpdateProduct, onCreateProduct, collections, onCreateCollection, colOrder, onReorderCollections, onUpdateCollection, onDeleteCollection }) {
   const [tab, setTab] = useState("stock");
   const [editingId, setEditingId] = useState(null);
   const [creating, setCreating] = useState(false);
+  const [creatingCollection, setCreatingCollection] = useState(false);
+  const [editingCollectionObj, setEditingCollectionObj] = useState(null);
   const [saveMsg, setSaveMsg] = useState("");
   
   const ts = dbProducts.reduce((s, p) => s + p.stock, 0);
@@ -1013,6 +1107,47 @@ function Admin({ dbProducts, onUpdateStock, onUpdatePrice, onUpdateProduct, onCr
     setTimeout(() => setSaveMsg(""), 2500);
   };
 
+  const handleCreateCollection = async (data) => {
+    await onCreateCollection(data);
+    setCreatingCollection(false);
+    setSaveMsg("Colección creada");
+    setTimeout(() => setSaveMsg(""), 2500);
+  };
+
+  const handleUpdateCollection = async (oldName, oldId, newName, newDesc) => {
+    if (onUpdateCollection) {
+      await onUpdateCollection(oldName, oldId, newName, newDesc);
+    }
+    setEditingCollectionObj(null);
+    setSaveMsg("Colección actualizada");
+    setTimeout(() => setSaveMsg(""), 2500);
+  };
+
+  // Ordena las colecciones según el orden guardado
+  const orderedCollections = useMemo(() => {
+    if (!colOrder || !collections) return collections || [];
+    const sorted = [...collections].sort((a, b) => {
+      const ia = colOrder.indexOf(a.id);
+      const ib = colOrder.indexOf(b.id);
+      if (ia === -1 && ib === -1) return 0;
+      if (ia === -1) return 1;
+      if (ib === -1) return -1;
+      return ia - ib;
+    });
+    return sorted;
+  }, [collections, colOrder]);
+
+  const moveCol = (idx, dir) => {
+    const arr = [...orderedCollections];
+    const newIdx = idx + dir;
+    if (newIdx < 0 || newIdx >= arr.length) return;
+    [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
+    const order = arr.map(c => c.id);
+    if (onReorderCollections) onReorderCollections(order);
+    setSaveMsg("Orden guardado");
+    setTimeout(() => setSaveMsg(""), 1800);
+  };
+
   return (
     <div style={{ maxWidth: "100%", padding: "32px 16px 80px" }}>
       <div style={{ marginBottom: 24, display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
@@ -1024,7 +1159,7 @@ function Admin({ dbProducts, onUpdateStock, onUpdatePrice, onUpdateProduct, onCr
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(140px,1fr))", gap: 12, marginBottom: 24 }}>
         {[
-          { l: "Modelos", v: dbProducts.length, i: "[ ]" },
+          { l: "Productos", v: dbProducts.length, i: "[ ]" },
           { l: "Unidades", v: ts, i: "##" },
           { l: "Valor en stock", v: fmt(tv), i: "$", sm: true },
           { l: "Stock bajo", v: lo, i: "!", w: lo > 0 },
@@ -1038,9 +1173,9 @@ function Admin({ dbProducts, onUpdateStock, onUpdatePrice, onUpdateProduct, onCr
         ))}
       </div>
       <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
-        {["stock", "prices", "productos"].map(t => (
+        {["stock", "prices", "productos", "colecciones"].map(t => (
           <button key={t} className={"ch " + (tab === t ? "con" : "cof")} onClick={() => { setTab(t); setEditingId(null); }}>
-            {t === "stock" ? "Control de Stock" : t === "prices" ? "Editar Precios" : "Productos"}
+            {t === "stock" ? "Control de Stock" : t === "prices" ? "Editar Precios" : t === "productos" ? "Productos" : "Colecciones"}
           </button>
         ))}
       </div>
@@ -1085,7 +1220,7 @@ function Admin({ dbProducts, onUpdateStock, onUpdatePrice, onUpdateProduct, onCr
       {tab === "prices" && (
         <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #ede8e0", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
           <table className="at" style={{ width: "100%", borderCollapse: "collapse", minWidth: 460 }}>
-            <thead><tr><th>Modelo / Variante</th><th>Precio actual</th><th>Nuevo precio</th></tr></thead>
+            <thead><tr><th>Producto / Variante</th><th>Precio actual</th><th>Nuevo precio</th></tr></thead>
             <tbody>
               {dbProducts.map(p => {
                 let imgUrl = "";
@@ -1124,6 +1259,19 @@ function Admin({ dbProducts, onUpdateStock, onUpdatePrice, onUpdateProduct, onCr
           </table>
         </div>
       )}
+      {creatingCollection && (
+        <CollectionEditor
+          onSave={handleCreateCollection}
+          onCancel={() => setCreatingCollection(false)}
+        />
+      )}
+      {editingCollectionObj && (
+        <CollectionEditor
+          collection={editingCollectionObj}
+          onSave={handleUpdateCollection}
+          onCancel={() => setEditingCollectionObj(null)}
+        />
+      )}
       {tab === "productos" && (
         <div>
           {creating ? (
@@ -1131,16 +1279,21 @@ function Admin({ dbProducts, onUpdateStock, onUpdatePrice, onUpdateProduct, onCr
               product={null}
               onSave={handleCreateProduct}
               onCancel={() => setCreating(false)}
+              collections={collections}
             />
           ) : editingId ? (
             <ProductEditor
               product={dbProducts.find(p => p.id === editingId)}
               onSave={handleSaveProduct}
               onCancel={() => setEditingId(null)}
+              collections={collections}
             />
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+                <button onClick={() => setCreatingCollection(true)} className="bol" style={{ padding: "10px 20px", fontSize: 13, display: "flex", alignItems: "center", gap: 6, border: "1px solid #c9a96e", color: "#c9a96e" }}>
+                  <span style={{ fontSize: 15, fontWeight: 700 }}>+</span> Nueva Colección
+                </button>
                 <button onClick={() => setCreating(true)} className="bdk" style={{ padding: "10px 20px", fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
                   <span style={{ fontSize: 15, fontWeight: 700 }}>+</span> Nuevo Producto
                 </button>
@@ -1184,6 +1337,71 @@ function Admin({ dbProducts, onUpdateStock, onUpdatePrice, onUpdateProduct, onCr
           )}
         </div>
       )}
+      {tab === "colecciones" && (
+        <div style={{ background: "#fff", border: "1px solid #ede8e0", borderRadius: 16, padding: "28px 24px", animation: "fU .25s ease" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+            <h3 style={{ fontSize: 17, fontWeight: 600, color: "#1a1612" }}>
+              Organizar Orden de Colecciones
+            </h3>
+            <button onClick={() => setCreatingCollection(true)} className="bol" style={{ padding: "8px 16px", fontSize: 12, border: "1px solid #c9a96e", color: "#c9a96e" }}>
+              + Nueva Colección
+            </button>
+          </div>
+          <p style={{ fontSize: 13, color: "#78716c", marginBottom: 20 }}>
+            Utilizá las flechas para cambiar el orden en que se muestran las colecciones en la tienda. El orden se guarda automáticamente.
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {orderedCollections.map((col, idx) => {
+              const isDefault = DEFAULT_COLS.some(d => d.id === col.id);
+              return (
+                <div key={col.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#faf8f5", border: "1px solid #ede8e0", borderRadius: 12, padding: "12px 18px" }}>
+                  <div style={{ flex: 1, marginRight: 16 }}>
+                    <span style={{ fontWeight: 600, fontSize: 14, color: "#1a1612" }}>{col.name}</span>
+                    {col.desc && <p style={{ fontSize: 12, color: "#78716c", marginTop: 4 }}>{col.desc}</p>}
+                  </div>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <button 
+                      onClick={() => setEditingCollectionObj(col)} 
+                      className="bol" 
+                      style={{ padding: "6px 12px", fontSize: 12 }}
+                    >
+                      Editar
+                    </button>
+                    {!isDefault && (
+                      <button 
+                        onClick={() => onDeleteCollection && onDeleteCollection(col.name, col.id)} 
+                        className="bol" 
+                        style={{ padding: "6px 12px", fontSize: 12, borderColor: "#fca5a5", color: "#dc2626" }}
+                      >
+                        Borrar
+                      </button>
+                    )}
+                    <div style={{ width: 1, height: 20, background: "#ede8e0", margin: "0 4px" }} />
+                    <button 
+                      onClick={() => moveCol(idx, -1)} 
+                      disabled={idx === 0} 
+                      className="bol" 
+                      style={{ width: 32, height: 32, padding: 0, display: "flex", alignItems: "center", justifyContent: "center", cursor: idx === 0 ? "not-allowed" : "pointer" }}
+                      title="Subir"
+                    >
+                      ▲
+                    </button>
+                    <button 
+                      onClick={() => moveCol(idx, 1)} 
+                      disabled={idx === orderedCollections.length - 1} 
+                      className="bol" 
+                      style={{ width: 32, height: 32, padding: 0, display: "flex", alignItems: "center", justifyContent: "center", cursor: idx === orderedCollections.length - 1 ? "not-allowed" : "pointer" }}
+                      title="Bajar"
+                    >
+                      ▼
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1196,6 +1414,33 @@ export default function App() {
   const [view, setView] = useState("shop");
   const [showCart, setShowCart] = useState(false);
   const [user, setUser] = useState(null);
+  const [colOrder, setColOrder] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("mallette_col_order") || "null") || null; } catch { return null; }
+  });
+  const [extraCollections, setExtraCollections] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("mallette_extra_collections") || "[]"); } catch { return []; }
+  });
+  const [collectionDescriptions, setCollectionDescriptions] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("mallette_collection_descriptions") || "{}"); } catch { return {}; }
+  });
+
+  // Extrae colecciones únicas directo de los productos
+  const buildCollectionsFromProducts = (products) => {
+    const seen = new Set();
+    const result = [];
+    products.forEach(p => {
+      if (p.coleccion && !seen.has(p.coleccion)) {
+        seen.add(p.coleccion);
+        // Buscar descripción en DEFAULT_COLS, en extraCollections, o en localDescriptions
+        const def = DEFAULT_COLS.find(c => c.name === p.coleccion);
+        const extra = extraCollections.find(c => c.name === p.coleccion);
+        const customDesc = collectionDescriptions[p.coleccion] || extra?.desc || '';
+        const id = p.coleccion.toLowerCase().trim().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+        result.push({ id: def?.id || extra?.id || id, name: p.coleccion, desc: def?.desc || customDesc });
+      }
+    });
+    return result.length > 0 ? result : DEFAULT_COLS;
+  };
 
   const fetchProducts = async () => {
     try {
@@ -1356,6 +1601,108 @@ export default function App() {
     }
   };
 
+  const createCollection = async (data) => {
+    // Agregamos la colección nueva al estado local y la persistimos
+    setExtraCollections(prev => {
+      if (prev.find(c => c.id === data.id)) return prev;
+      const next = [...prev, data];
+      localStorage.setItem("mallette_extra_collections", JSON.stringify(next));
+      return next;
+    });
+    setCollectionDescriptions(prev => {
+      const updated = { ...prev, [data.name]: data.desc };
+      localStorage.setItem("mallette_collection_descriptions", JSON.stringify(updated));
+      return updated;
+    });
+    // Intentar guardar en tabla collections si existe (silencioso si no existe)
+    try {
+      await supabase.from("collections").insert([data]);
+    } catch (_) { /* tabla opcional */ }
+  };
+
+  const updateCollection = async (oldName, oldId, newName, newDesc) => {
+    const newId = newName.toLowerCase().trim().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+    
+    setExtraCollections(prev => {
+      const filtered = prev.filter(c => c.id !== oldId);
+      const updatedList = [...filtered, { id: newId, name: newName, desc: newDesc }];
+      localStorage.setItem("mallette_extra_collections", JSON.stringify(updatedList));
+      return updatedList;
+    });
+
+    setCollectionDescriptions(prev => {
+      const updated = { ...prev };
+      delete updated[oldName];
+      updated[newName] = newDesc;
+      localStorage.setItem("mallette_collection_descriptions", JSON.stringify(updated));
+      return updated;
+    });
+
+    if (colOrder) {
+      const updatedOrder = colOrder.map(id => id === oldId ? newId : id);
+      setColOrder(updatedOrder);
+      localStorage.setItem("mallette_col_order", JSON.stringify(updatedOrder));
+    }
+
+    try {
+      const { error } = await supabase
+        .from("products")
+        .update({ coleccion: newName })
+        .eq("coleccion", oldName);
+      if (error) throw error;
+      
+      try {
+        await supabase.from("collections").update({ id: newId, name: newName, desc: newDesc }).eq("id", oldId);
+      } catch (_) {}
+
+      await fetchProducts();
+    } catch (err) {
+      console.error("Error al actualizar la colección en Supabase:", err);
+      alert("Error al actualizar colección: " + err.message);
+    }
+  };
+
+  const deleteCollection = async (colName, colId) => {
+    if (!window.confirm(`¿Estás seguro de que querés borrar la colección "${colName}"? Los productos vinculados pasarán a la colección por defecto.`)) return;
+
+    setExtraCollections(prev => {
+      const next = prev.filter(c => c.id !== colId);
+      localStorage.setItem("mallette_extra_collections", JSON.stringify(next));
+      return next;
+    });
+
+    setCollectionDescriptions(prev => {
+      const next = { ...prev };
+      delete next[colName];
+      localStorage.setItem("mallette_collection_descriptions", JSON.stringify(next));
+      return next;
+    });
+
+    if (colOrder) {
+      const next = colOrder.filter(id => id !== colId);
+      setColOrder(next);
+      localStorage.setItem("mallette_col_order", JSON.stringify(next));
+    }
+
+    const fallbackColName = DEFAULT_COLS[0].name;
+    try {
+      const { error } = await supabase
+        .from("products")
+        .update({ coleccion: fallbackColName })
+        .eq("coleccion", colName);
+      if (error) throw error;
+
+      try {
+        await supabase.from("collections").delete().eq("id", colId);
+      } catch (_) {}
+
+      await fetchProducts();
+    } catch (err) {
+      console.error("Error al borrar la colección en la base de datos:", err);
+      alert("Error al borrar la colección: " + err.message);
+    }
+  };
+
   const add = (product, variant) => {
     const img = variant.imgs[0];
     const vc = variant.c || "";
@@ -1370,7 +1717,41 @@ export default function App() {
     });
   };
 
-  const groupedProducts = useMemo(() => groupProducts(dbProducts), [dbProducts]);
+  // Combina colecciones derivadas de productos + las extras creadas por el admin
+  const allCollections = useMemo(() => {
+    const fromProducts = buildCollectionsFromProducts(dbProducts);
+    const merged = [...fromProducts];
+    extraCollections.forEach(ec => {
+      const existing = merged.find(c => c.id === ec.id || c.name === ec.name);
+      if (!existing) {
+        merged.push(ec);
+      } else {
+        // Si ya existe pero no tiene descripción, le agregamos la descripción custom
+        if (!existing.desc && ec.desc) {
+          existing.desc = ec.desc;
+        }
+      }
+    });
+    if (colOrder) {
+      merged.sort((a, b) => {
+        const ia = colOrder.indexOf(a.id);
+        const ib = colOrder.indexOf(b.id);
+        if (ia === -1 && ib === -1) return 0;
+        if (ia === -1) return 1;
+        if (ib === -1) return -1;
+        return ia - ib;
+      });
+    }
+    COLS = merged; // actualizar referencia global para los filtros
+    return merged;
+  }, [dbProducts, extraCollections, colOrder, collectionDescriptions]);
+
+  const handleReorderCollections = (newOrder) => {
+    setColOrder(newOrder);
+    localStorage.setItem("mallette_col_order", JSON.stringify(newOrder));
+  };
+
+  const groupedProducts = useMemo(() => groupProducts(dbProducts, allCollections), [dbProducts, allCollections]);
   const n = cart.reduce((s, c) => s + c.qty, 0);
 
   if (loading) {
@@ -1398,13 +1779,13 @@ export default function App() {
   return (
     <div style={{ minHeight: "100vh", background: "#faf8f5" }}>
       <Hdr view={view} setView={setView} n={n} setShowCart={setShowCart} user={user} onLogin={loginWithGoogle} onLogout={logout} />
-      {view === "shop" && <Shop products={groupedProducts} onAdd={add} />}
+      {view === "shop" && <Shop products={groupedProducts} onAdd={add} collections={allCollections} />}
 {/* Auto-redirigir si usuario logueado no es admin */}
       {view === "admin" && user && !ADMIN_EMAILS.includes(user.email) && (() => { setTimeout(() => setView("shop"), 0); return null; })()}
       {view === "admin" && (
         user
           ? (ADMIN_EMAILS.includes(user.email)
-              ? <Admin dbProducts={dbProducts} onUpdateStock={updateStock} onUpdatePrice={updatePrice} onUpdateProduct={updateProduct} onCreateProduct={createProduct} />
+              ? <Admin dbProducts={dbProducts} onUpdateStock={updateStock} onUpdatePrice={updatePrice} onUpdateProduct={updateProduct} onCreateProduct={createProduct} collections={allCollections} onCreateCollection={createCollection} colOrder={colOrder} onReorderCollections={handleReorderCollections} onUpdateCollection={updateCollection} onDeleteCollection={deleteCollection} />
               : null)
           : <AdminLogin onLogin={loginWithGoogle} />
       )}

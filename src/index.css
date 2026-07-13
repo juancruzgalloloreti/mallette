@@ -55,6 +55,12 @@ body{background:#faf8f5;font-family:Inter,sans-serif;color:#1a1612;width:100%;ov
 .cbe{background:#f0ebe3;color:#8b6914}
 .cbs{background:#e8eef5;color:#1e4a7a}
 .cbc{background:#f5ede8;color:#7a3520}
+/* Colecciones dinámicas — paleta rotativa */
+.cbd{background:#e8f5ec;color:#1a6b35}
+.cbf{background:#f0e8f5;color:#6b1a6b}
+.cbg2{background:#f5f0e8;color:#6b4f1a}
+.cbh{background:#e8f5f5;color:#1a5a6b}
+.cbi{background:#f5e8f0;color:#6b1a4f}
 
 /* Product cards */
 .pcard{background:#fff;border-radius:20px;overflow:hidden;border:1px solid #ede8e0;transition:transform .35s cubic-bezier(.22,1,.36,1),box-shadow .35s;cursor:pointer}
