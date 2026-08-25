@@ -88,6 +88,20 @@ const groupProducts = (dbRows, cols) => {
       descuento_porcentaje: Number(row.descuento_porcentaje || 0)
     });
   });
+
+  // Auto-selección: poner variants con stock primero, sin stock al final
+  grouped.forEach(p => {
+    const inStock = p.variants.filter(v => v.stock > 0);
+    const noStock = p.variants.filter(v => v.stock === 0);
+    p.variants = [...inStock, ...noStock];
+    // El stock/precio del producto refleja la variante con prioridad (con stock)
+    const lead = p.variants[0];
+    if (lead) {
+      p.stock = lead.stock;
+      p.price = lead.price;
+    }
+  });
+
   return grouped;
 };
 
@@ -362,21 +376,52 @@ function Modal({ p, onClose, onAdd, onZoom, collections }) {
 
               {hasColors && (
                 <div style={{ marginBottom: 16 }}>
-                  <p style={{ fontSize: 13, fontWeight: 600, color: "#1a1612", letterSpacing: ".02em", marginBottom: 10, paddingBottom: 6, borderBottom: "2px solid #c9a96e" }}>
-                    Selecciona el color:
-                  </p>
-                  <div className="color-sel-container">
-                    {p.variants.map((vv, i) => (
-                      <button key={i} className={"color-sel" + (i === selV ? " on" : "")} onClick={() => setSelV(i)}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                          <div style={{ width: 36, height: 36, borderRadius: 8, overflow: "hidden", flexShrink: 0 }}>
-                            <img src={vv.imgs[0]} alt={vv.c} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                          </div>
-                          <span style={{ fontSize: 14, fontWeight: i === selV ? 600 : 400 }}>{vv.c}</span>
-                          {i === selV && <span style={{ marginLeft: "auto", color: "#c9a96e", fontSize: 16 }}>&#10003;</span>}
-                        </div>
-                      </button>
-                    ))}
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 10, paddingBottom: 6, borderBottom: "2px solid #c9a96e" }}>
+                    <p style={{ fontSize: 13, fontWeight: 600, color: "#1a1612", letterSpacing: ".02em" }}>Color:</p>
+                    <p style={{ fontSize: 13, color: "#1a1612", fontWeight: 500 }}>{v.c || ""}</p>
+                    {v.stock === 0 && <span style={{ fontSize: 11, color: "#a09890", fontStyle: "italic" }}>(sin stock)</span>}
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    {p.variants.map((vv, i) => {
+                      const selected = i === selV;
+                      const sinStock = vv.stock === 0;
+                      return (
+                        <button
+                          key={i}
+                          onClick={() => setSelV(i)}
+                          title={vv.c + (sinStock ? " — Sin stock" : "")}
+                          style={{
+                            position: "relative",
+                            width: 56,
+                            height: 56,
+                            borderRadius: 10,
+                            overflow: "hidden",
+                            border: selected ? "2.5px solid #1a1612" : "2px solid transparent",
+                            boxShadow: selected ? "0 0 0 3px rgba(201,169,110,0.45)" : "0 1px 4px rgba(0,0,0,0.10)",
+                            padding: 0,
+                            cursor: "pointer",
+                            opacity: sinStock ? 0.45 : 1,
+                            transition: "all .18s",
+                            background: "#f7f3ee",
+                            flexShrink: 0,
+                          }}
+                        >
+                          <img src={vv.imgs[0]} alt={vv.c} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                          {/* Overlay sin stock */}
+                          {sinStock && (
+                            <div style={{ position: "absolute", inset: 0, background: "rgba(250,248,245,0.55)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              <div style={{ width: "70%", height: 1.5, background: "#1a1612", transform: "rotate(-45deg)", borderRadius: 2 }} />
+                            </div>
+                          )}
+                          {/* Tick de seleccionado */}
+                          {selected && !sinStock && (
+                            <div style={{ position: "absolute", bottom: 3, right: 3, width: 16, height: 16, borderRadius: "50%", background: "#1a1612", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              <svg width="9" height="9" viewBox="0 0 10 10" fill="none"><polyline points="1.5,5 4,7.5 8.5,2" stroke="#faf8f5" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -387,8 +432,8 @@ function Modal({ p, onClose, onAdd, onZoom, collections }) {
                   {enRebaja ? (
                     <>
                       <span style={{ textDecoration: "line-through", color: "#a09890", fontSize: 16 }}>{fmt(basePrice)}</span>
-                      <span className="serif" style={{ fontSize: 24, color: "#b91c1c", fontWeight: 700 }}>{fmt(currentPrice)}</span>
-                      <span style={{ background: "#fef2f2", color: "#b91c1c", fontSize: 11, fontWeight: 700, padding: "2px 6px", borderRadius: 6 }}>{descuento}% OFF</span>
+                      <span className="serif" style={{ fontSize: 24, color: "#1a1612", fontWeight: 700 }}>{fmt(currentPrice)}</span>
+                      <span style={{ background: "#f0ebe3", color: "#5c534a", fontSize: 11, fontWeight: 700, padding: "2px 6px", borderRadius: 6 }}>{descuento}% OFF</span>
                     </>
                   ) : (
                     <span className="serif" style={{ fontSize: 24 }}>{fmt(currentPrice)}</span>
@@ -443,7 +488,7 @@ function Card({ p, onAdd, onOpen, delay, collections }) {
           </div>
         )}
         {enRebaja && stock > 0 && (
-          <div style={{ position: "absolute", top: 10, left: 10, background: "#b91c1c", color: "#fff", fontSize: 10, fontWeight: 700, padding: "3px 9px", borderRadius: 100, letterSpacing: ".04em" }}>
+          <div style={{ position: "absolute", top: 10, left: 10, background: "#1a1612", color: "#faf8f5", fontSize: 10, fontWeight: 700, padding: "3px 9px", borderRadius: 100, letterSpacing: ".04em" }}>
             {descuento}% OFF
           </div>
         )}
@@ -461,7 +506,7 @@ function Card({ p, onAdd, onOpen, delay, collections }) {
             {enRebaja ? (
               <>
                 <span style={{ textDecoration: "line-through", color: "#a09890", fontSize: 14 }}>{fmt(price)}</span>
-                <span className="serif" style={{ fontSize: 19, color: "#b91c1c", fontWeight: 700 }}>{fmt(discountedPrice)}</span>
+                <span className="serif" style={{ fontSize: 19, color: "#1a1612", fontWeight: 700 }}>{fmt(discountedPrice)}</span>
               </>
             ) : (
               <span className="serif" style={{ fontSize: 19, color: "#1a1612" }}>{fmt(price)}</span>
@@ -802,6 +847,127 @@ function CollectionEditor({ onSave, onCancel, collection }) {
 }
 
 // ─── Editor de Producto ───────────────────────────────────────────────────────
+// Subcomponente para una sola variante de color
+function ColorVariantBlock({ variant, idx, total, onUpdate, onRemove, uploadingIdx, setUploadingIdx }) {
+  const fileRef = useRef(null);
+  const [newUrl, setNewUrl] = useState("");
+
+  const BUCKET_URL = "https://ioldkkknswpgiblmtnor.supabase.co/storage/v1/object/public/fotos/";
+
+  const uploadImg = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploadingIdx(idx);
+    try {
+      const ext = file.name.split(".").pop();
+      const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}.${ext}`;
+      const { error } = await supabase.storage.from("fotos").upload(fileName, file, { cacheControl: "3600", upsert: false });
+      if (error) throw error;
+      const { data: urlData } = supabase.storage.from("fotos").getPublicUrl(fileName);
+      if (!urlData?.publicUrl) throw new Error("No se pudo obtener URL pública");
+      onUpdate(idx, "imgs", [...variant.imgs, urlData.publicUrl]);
+    } catch (err) {
+      alert("Error al subir imagen: " + (err.message || JSON.stringify(err)));
+    } finally {
+      setUploadingIdx(null);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  const addUrl = () => {
+    const url = newUrl.trim();
+    if (!url) return;
+    onUpdate(idx, "imgs", [...variant.imgs, url]);
+    setNewUrl("");
+  };
+
+  const removeImg = (i) => onUpdate(idx, "imgs", variant.imgs.filter((_, ii) => ii !== i));
+
+  const inputStyle = {
+    width: "100%", padding: "8px 10px", border: "1px solid #ddd8d0",
+    borderRadius: 8, fontFamily: "Inter,sans-serif", fontSize: 13,
+    background: "#fff", outline: "none", color: "#1a1612", boxSizing: "border-box"
+  };
+  const labelStyle = { fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "#78716c", marginBottom: 4, display: "block" };
+
+  const isUploading = uploadingIdx === idx;
+
+  return (
+    <div style={{ border: "1px solid #ddd8d0", borderRadius: 14, padding: "16px 18px", background: "#fdfcfb", position: "relative" }}>
+      {/* Encabezado del bloque de color */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {variant.imgs[0] && (
+            <div style={{ width: 36, height: 36, borderRadius: 8, overflow: "hidden", border: "1px solid #ede8e0", flexShrink: 0 }}>
+              <img src={variant.imgs[0]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            </div>
+          )}
+          <span style={{ fontSize: 13, fontWeight: 600, color: "#1a1612" }}>
+            {variant.colorName || `Color ${idx + 1}`}
+          </span>
+          {variant.stock === 0 && <span style={{ fontSize: 10, background: "#fef2f2", color: "#dc2626", padding: "2px 6px", borderRadius: 6, fontWeight: 600 }}>Sin stock</span>}
+        </div>
+        {total > 1 && (
+          <button onClick={() => onRemove(idx)} style={{ background: "none", border: "none", cursor: "pointer", color: "#a09890", fontSize: 18, lineHeight: 1, padding: 4 }} title="Quitar este color">×</button>
+        )}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+        <div>
+          <label style={labelStyle}>Nombre del color</label>
+          <input
+            style={inputStyle}
+            placeholder={total === 1 ? "Dejar vacío si no aplica" : "Ej: Negro, Beige, Rosa"}
+            value={variant.colorName}
+            onChange={e => onUpdate(idx, "colorName", e.target.value)}
+          />
+        </div>
+        <div>
+          <label style={labelStyle}>Stock</label>
+          <input
+            style={inputStyle}
+            type="number"
+            min="0"
+            value={variant.stock}
+            onChange={e => onUpdate(idx, "stock", Number(e.target.value))}
+          />
+        </div>
+      </div>
+
+      {/* Imágenes de este color */}
+      <div>
+        <label style={labelStyle}>Fotos de este color</label>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+          {variant.imgs.map((url, i) => (
+            <div key={i} style={{ position: "relative", width: 56, height: 56 }}>
+              <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 8, border: "1px solid #ede8e0" }} />
+              <button onClick={() => removeImg(i)} style={{ position: "absolute", top: -5, right: -5, width: 16, height: 16, borderRadius: "50%", background: "#ef4444", border: "none", cursor: "pointer", color: "#fff", fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, lineHeight: 1, padding: 0 }}>×</button>
+            </div>
+          ))}
+          {variant.imgs.length === 0 && (
+            <div style={{ width: 56, height: 56, borderRadius: 8, border: "1.5px dashed #ddd8d0", background: "#f7f3ee", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <span style={{ color: "#c9c5be", fontSize: 20 }}>+</span>
+            </div>
+          )}
+        </div>
+        <input type="file" accept="image/*" ref={fileRef} onChange={uploadImg} style={{ display: "none" }} />
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          disabled={isUploading}
+          style={{ width: "100%", padding: "8px", background: "#f0ebe3", border: "1px solid #ddd8d0", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 600, color: "#78716c", fontFamily: "Inter,sans-serif", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginBottom: 6 }}
+        >
+          <span>📁</span> {isUploading ? "Subiendo..." : "Subir foto desde la PC"}
+        </button>
+        <div style={{ display: "flex", gap: 6 }}>
+          <input style={{ ...inputStyle, flex: 1 }} placeholder="O pegar URL externa" value={newUrl} onChange={e => setNewUrl(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addUrl(); } }} />
+          <button onClick={addUrl} style={{ padding: "8px 12px", background: "#f0ebe3", border: "1px solid #ddd8d0", borderRadius: 8, cursor: "pointer", fontSize: 11, fontWeight: 600, color: "#78716c", whiteSpace: "nowrap", fontFamily: "Inter,sans-serif" }}>+ URL</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ProductEditor({ product, onSave, onCancel, collections }) {
   const parseImgs = (raw) => {
     if (!raw) return [];
@@ -810,153 +976,116 @@ function ProductEditor({ product, onSave, onCancel, collections }) {
   };
 
   const [form, setForm] = useState({
-    modelo: product?.modelo || "",
-    coleccion: product?.coleccion || "Capsula Equilibrio",
-    estilo: product?.estilo || "",
-    precio: product?.precio || "",
-    stock: product?.stock !== undefined ? product.stock : "",
+    modelo: product?.name || product?.modelo || "",
+    coleccion: product?.col || product?.coleccion || "Capsula Equilibrio",
+    estilo: product?.style || product?.estilo || "",
+    precio: product?.price || product?.precio || "",
     orden: product?.orden !== undefined ? product.orden : "",
-    descripcion: product?.descripcion || "",
-    nota: product?.nota || "",
-    variantes_de_color: product?.variantes_de_color || "Único",
-    images_url: product ? parseImgs(product.images_url) : [],
+    descripcion: product?.desc || product?.descripcion || "",
+    nota: product?.note || product?.nota || "",
     en_rebaja: product?.en_rebaja || false,
     descuento_porcentaje: product?.descuento_porcentaje || 0
   });
+
+  const baseVariantTemplate = { colorName: "", stock: 0, imgs: [] };
+  
+  const [variants, setVariants] = useState(() => {
+    if (product && product.variants) {
+      return product.variants.map(v => ({
+        id: v.id,
+        colorName: v.c || "",
+        stock: v.stock,
+        imgs: [...v.imgs]
+      }));
+    } else if (product && product.modelo) {
+      return [{
+        id: product.id,
+        colorName: product.variantes_de_color === "Único" ? "" : (product.variantes_de_color || ""),
+        stock: product.stock !== undefined ? product.stock : 0,
+        imgs: parseImgs(product.images_url)
+      }];
+    }
+    return [{ ...baseVariantTemplate }];
+  });
+
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [newImgUrl, setNewImgUrl] = useState("");
-  const [uploadedInSession, setUploadedInSession] = useState([]);
-  const fileInputRef = useRef(null);
+  const [uploadingIdx, setUploadingIdx] = useState(null);
 
   const upd = (k, v) => setForm(f => ({ ...f, [k]: v }));
-
-  const addImg = () => {
-    const url = newImgUrl.trim();
-    if (!url) return;
-    upd("images_url", [...form.images_url, url]);
-    setNewImgUrl("");
+  
+  const updateVariant = (idx, field, val) => {
+    setVariants(prev => prev.map((v, i) => i === idx ? { ...v, [field]: val } : v));
   };
-  const removeImg = (i) => upd("images_url", form.images_url.filter((_, idx) => idx !== i));
-
-  const handleUploadImage = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    setUploading(true);
-    try {
-      const fileExt = file.name.split(".").pop();
-      const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
-      
-      const { data, error } = await supabase.storage
-        .from("fotos")
-        .upload(fileName, file, { cacheControl: "3600", upsert: false });
-        
-      if (error) throw error;
-      
-      const { data: urlData } = supabase.storage
-        .from("fotos")
-        .getPublicUrl(fileName);
-        
-      if (!urlData || !urlData.publicUrl) {
-        throw new Error("No se pudo obtener la URL pública de la imagen");
-      }
-      
-      upd("images_url", [...form.images_url, urlData.publicUrl]);
-      setUploadedInSession(prev => [...prev, urlData.publicUrl]);
-    } catch (err) {
-      console.error("Error al subir imagen:", err);
-      alert("Error al subir imagen: " + (err.message || JSON.stringify(err)));
-    } finally {
-      setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
+  
+  const addVariant = () => {
+    setVariants(prev => [...prev, { ...baseVariantTemplate }]);
   };
-
-  const handleCancel = async () => {
-    if (uploadedInSession.length > 0) {
-      const BUCKET_URL = "https://ioldkkknswpgiblmtnor.supabase.co/storage/v1/object/public/fotos/";
-      const filesToDelete = uploadedInSession
-        .filter(url => url.startsWith(BUCKET_URL))
-        .map(url => url.substring(BUCKET_URL.length));
-        
-      if (filesToDelete.length > 0) {
-        try {
-          await supabase.storage.from("fotos").remove(filesToDelete);
-        } catch (err) {
-          console.error("Error al limpiar fotos huérfanas al cancelar:", err);
-        }
-      }
-    }
-    onCancel();
+  
+  const removeVariant = (idx) => {
+    if (variants.length <= 1) return;
+    setVariants(prev => prev.filter((_, i) => i !== idx));
   };
 
   const handleSave = async () => {
-    if (!form.modelo.trim()) {
-      alert("El nombre del modelo es obligatorio.");
-      return;
-    }
+    if (!form.modelo.trim()) { alert("El nombre del modelo es obligatorio."); return; }
+    if (variants.length === 0) { alert("Debe tener al menos una variante."); return; }
+    
     setSaving(true);
-
     try {
-      // Detectar imágenes que fueron eliminadas en esta edición para borrarlas físicamente de Supabase Storage
-      const BUCKET_URL = "https://ioldkkknswpgiblmtnor.supabase.co/storage/v1/object/public/fotos/";
-      const originalUrls = product ? parseImgs(product.images_url) : [];
-      const allAvailableUrls = [...originalUrls, ...uploadedInSession];
-      const deletedUrls = allAvailableUrls.filter(url => !form.images_url.includes(url));
-      
-      const filesToDelete = deletedUrls
-        .filter(url => url.startsWith(BUCKET_URL))
-        .map(url => url.substring(BUCKET_URL.length));
-        
-      if (filesToDelete.length > 0) {
-        try {
-          const { error } = await supabase.storage.from("fotos").remove(filesToDelete);
-          if (error) console.error("Error al borrar archivos de Storage:", error);
-        } catch (err) {
-          console.error("Error eliminando archivos:", err);
-        }
+      const isMulti = variants.length > 1;
+      const baseData = {
+        modelo: form.modelo.trim(),
+        coleccion: form.coleccion,
+        estilo: form.estilo.trim(),
+        precio: Number(form.precio),
+        orden: Number(form.orden),
+        descripcion: form.descripcion,
+        nota: form.nota,
+        en_rebaja: form.en_rebaja,
+        descuento_porcentaje: Number(form.descuento_porcentaje)
+      };
+
+      const rowsToSave = variants.map((v, i) => {
+        const colorVal = v.colorName.trim();
+        const finalColor = colorVal || (isMulti ? `Color ${i+1}` : "Único");
+        return {
+          ...baseData,
+          id: v.id || null, // Si es null, el padre decidirá crear un id
+          variantes_de_color: finalColor,
+          stock: Number(v.stock) || 0,
+          images_url: v.imgs
+        };
+      });
+
+      // El prop onSave original de App espera (id, data) o (_, data) para crear UN producto.
+      // Modificaremos la lógica del padre App para que onSave sea onSaveProducts y reciba el array,
+      // pero por ahora, si el parent espera multi-save lo llamamos con el array.
+      if (typeof onSave === 'function') {
+         await onSave(product?.id || product?.name, rowsToSave);
       }
     } catch (err) {
-      console.warn("No se pudo procesar la eliminación de archivos de storage:", err);
+      console.error(err);
+      alert("Error al guardar: " + err.message);
+    } finally {
+      setSaving(false);
     }
-
-    await onSave(product?.id, {
-      modelo: form.modelo.trim(),
-      coleccion: form.coleccion,
-      estilo: form.estilo.trim(),
-      precio: Number(form.precio),
-      stock: Number(form.stock),
-      orden: Number(form.orden),
-      descripcion: form.descripcion,
-      nota: form.nota,
-      variantes_de_color: form.variantes_de_color.trim() || "Único",
-      images_url: form.images_url,
-      en_rebaja: form.en_rebaja,
-      descuento_porcentaje: Number(form.descuento_porcentaje)
-    });
-    setSaving(false);
   };
 
-  const inputStyle = {
-    width: "100%", padding: "9px 12px", border: "1px solid #ddd8d0",
-    borderRadius: 8, fontFamily: "Inter,sans-serif", fontSize: 13,
-    background: "#fff", outline: "none", color: "#1a1612",
-    boxSizing: "border-box"
-  };
+  const inputStyle = { width: "100%", padding: "9px 12px", border: "1px solid #ddd8d0", borderRadius: 8, fontFamily: "Inter,sans-serif", fontSize: 13, background: "#fff", outline: "none", color: "#1a1612", boxSizing: "border-box" };
   const labelStyle = { fontSize: 11, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "#78716c", marginBottom: 5, display: "block" };
 
   return (
-    <div style={{ background: "#fff", border: "1px solid #ede8e0", borderRadius: 16, padding: "28px 24px", maxWidth: 560, animation: "fU .25s ease" }}>
+    <div style={{ background: "#fff", border: "1px solid #ede8e0", borderRadius: 16, padding: "28px 24px", maxWidth: 580, animation: "fU .25s ease" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
         <h3 style={{ fontSize: 17, fontWeight: 600, color: "#1a1612" }}>
           {product ? "Editar producto" : "Crear nuevo producto"}
         </h3>
-        <button onClick={handleCancel} style={{ background: "none", border: "none", cursor: "pointer", color: "#a09890", fontSize: 20, lineHeight: 1 }}>×</button>
+        <button onClick={onCancel} style={{ background: "none", border: "none", cursor: "pointer", color: "#a09890", fontSize: 20, lineHeight: 1 }}>×</button>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
         <div>
-          <label style={labelStyle}>Nombre</label>
+          <label style={labelStyle}>Nombre del modelo</label>
           <input style={inputStyle} value={form.modelo} onChange={e => upd("modelo", e.target.value)} />
         </div>
         <div>
@@ -972,15 +1101,11 @@ function ProductEditor({ product, onSave, onCancel, collections }) {
           <input style={inputStyle} value={form.estilo} onChange={e => upd("estilo", e.target.value)} />
         </div>
         <div>
-          <label style={labelStyle}>Precio</label>
+          <label style={labelStyle}>Precio General</label>
           <input style={inputStyle} type="number" value={form.precio} onChange={e => upd("precio", e.target.value)} />
         </div>
         <div>
-          <label style={labelStyle}>Stock inicial</label>
-          <input style={inputStyle} type="number" value={form.stock} onChange={e => upd("stock", e.target.value)} />
-        </div>
-        <div>
-          <label style={labelStyle}>Orden</label>
+          <label style={labelStyle}>Orden en la lista</label>
           <input style={inputStyle} type="number" value={form.orden} onChange={e => upd("orden", e.target.value)} />
         </div>
       </div>
@@ -992,91 +1117,63 @@ function ProductEditor({ product, onSave, onCancel, collections }) {
 
       <div style={{ marginBottom: 14 }}>
         <label style={labelStyle}>Nota adicional (opcional)</label>
-        <input style={inputStyle} placeholder="Ej: Incluye doble correa y billetera" value={form.nota} onChange={e => upd("nota", e.target.value)} />
+        <input style={inputStyle} placeholder="Ej: Incluye doble correa" value={form.nota} onChange={e => upd("nota", e.target.value)} />
       </div>
 
-      {/* Sección de Rebajas */}
-      <div style={{ background: "#faf8f5", border: "1px solid #ede8e0", borderRadius: 12, padding: "14px", marginBottom: 14 }}>
+      <div style={{ background: "#faf8f5", border: "1px solid #ede8e0", borderRadius: 12, padding: "14px", marginBottom: 20 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: form.en_rebaja ? 10 : 0 }}>
-          <input 
-            type="checkbox" 
-            id="en_rebaja" 
-            checked={form.en_rebaja} 
-            onChange={e => upd("en_rebaja", e.target.checked)} 
-            style={{ width: 16, height: 16, cursor: "pointer" }} 
-          />
-          <label htmlFor="en_rebaja" style={{ fontSize: 13, fontWeight: 600, color: "#1a1612", cursor: "pointer" }}>
-            Habilitar rebaja (oferta)
-          </label>
+          <input type="checkbox" id="en_rebaja" checked={form.en_rebaja} onChange={e => upd("en_rebaja", e.target.checked)} style={{ width: 16, height: 16, cursor: "pointer" }} />
+          <label htmlFor="en_rebaja" style={{ fontSize: 13, fontWeight: 600, color: "#1a1612", cursor: "pointer" }}>Habilitar rebaja (oferta)</label>
         </div>
         {form.en_rebaja && (
           <div style={{ animation: "fU .2s ease" }}>
             <label style={labelStyle}>Porcentaje de descuento (% OFF)</label>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <input 
-                type="number" 
-                min="1" 
-                max="99" 
-                style={{ ...inputStyle, width: 100 }} 
-                value={form.descuento_porcentaje} 
-                onChange={e => upd("descuento_porcentaje", Math.max(0, Math.min(100, Number(e.target.value))))} 
-              />
+              <input type="number" min="1" max="99" style={{ ...inputStyle, width: 100 }} value={form.descuento_porcentaje} onChange={e => upd("descuento_porcentaje", Math.max(0, Math.min(100, Number(e.target.value))))} />
               <span style={{ fontSize: 13, color: "#78716c", fontWeight: 500 }}>% de descuento</span>
             </div>
           </div>
         )}
       </div>
 
+      {/* Bloques de variantes de color */}
       <div style={{ marginBottom: 20 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-          <label style={labelStyle}>Variantes de color e imágenes</label>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <label style={labelStyle}>Colores y Stock</label>
         </div>
-        <input style={{ ...inputStyle, marginBottom: 10 }} placeholder="Color (dejar vacío si no aplica)" value={form.variantes_de_color === "Único" ? "" : form.variantes_de_color} onChange={e => upd("variantes_de_color", e.target.value || "Único")} />
-        <p style={{ fontSize: 11, color: "#a09890", marginTop: -6, marginBottom: 14, lineHeight: 1.4 }}>
-          💡 Para crear múltiples colores para un mismo modelo (como Camel y Bordo en Simona), creá un producto separado para cada color usando siempre el mismo <strong>Nombre</strong>.
-        </p>
         
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
-          {form.images_url.map((url, i) => (
-            <div key={i} style={{ position: "relative", width: 64, height: 64 }}>
-              <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 8, border: "1px solid #ede8e0" }} />
-              <button onClick={() => removeImg(i)} style={{ position: "absolute", top: -6, right: -6, width: 18, height: 18, borderRadius: "50%", background: "#ef4444", border: "none", cursor: "pointer", color: "#fff", fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, lineHeight: 1 }}>×</button>
-            </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 14 }}>
+          {variants.map((v, i) => (
+            <ColorVariantBlock
+              key={i}
+              variant={v}
+              idx={i}
+              total={variants.length}
+              onUpdate={updateVariant}
+              onRemove={removeVariant}
+              uploadingIdx={uploadingIdx}
+              setUploadingIdx={setUploadingIdx}
+            />
           ))}
         </div>
-
-        {/* Subida directa a Supabase Storage */}
-        <div style={{ marginBottom: 10 }}>
-          <input type="file" accept="image/*" ref={fileInputRef} onChange={handleUploadImage} style={{ display: "none" }} />
-          <button 
-            type="button" 
-            onClick={() => fileInputRef.current?.click()} 
-            disabled={uploading} 
-            style={{ width: "100%", padding: "10px", background: "#f0ebe3", border: "1px solid #ddd8d0", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#78716c", fontFamily: "Inter,sans-serif", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
-          >
-            <span>📁</span> {uploading ? "Subiendo..." : "Subir imagen desde la PC"}
-          </button>
-        </div>
-
-        <div style={{ display: "flex", gap: 8 }}>
-          <input style={{ ...inputStyle, flex: 1 }} placeholder="O pegar URL de imagen externa" value={newImgUrl} onChange={e => setNewImgUrl(e.target.value)}
-            onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addImg(); } }} />
-          <button onClick={addImg} style={{ padding: "9px 14px", background: "#f0ebe3", border: "1px solid #ddd8d0", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 600, color: "#78716c", whiteSpace: "nowrap", fontFamily: "Inter,sans-serif" }}>+ Agregar URL</button>
-        </div>
+        
+        <button type="button" onClick={addVariant} style={{ width: "100%", padding: "12px", background: "#fff", border: "1.5px dashed #c9a96e", borderRadius: 10, color: "#c9a96e", fontWeight: 600, fontSize: 13, cursor: "pointer", fontFamily: "Inter,sans-serif", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, transition: "background .2s" }}>
+          <span style={{ fontSize: 16 }}>+</span> Agregar Color
+        </button>
       </div>
 
       <div style={{ display: "flex", gap: 10 }}>
-        <button onClick={handleSave} disabled={saving || uploading} className="bdk" style={{ flex: 1, padding: "12px", fontSize: 13 }}>
-          {saving ? "Guardando..." : product ? "Guardar cambios" : "Crear producto"}
+        <button onClick={handleSave} disabled={saving || uploadingIdx !== null} className="bdk" style={{ flex: 1, padding: "12px", fontSize: 13 }}>
+          {saving ? "Guardando..." : "Guardar Producto"}
         </button>
-        <button onClick={handleCancel} className="bol" style={{ padding: "12px 20px", fontSize: 13 }}>Cancelar</button>
+        <button onClick={onCancel} className="bol" style={{ padding: "12px 20px", fontSize: 13 }}>Cancelar</button>
       </div>
     </div>
   );
 }
 
 
-function Admin({ dbProducts, onUpdateStock, onUpdatePrice, onUpdateProduct, onCreateProduct, collections, onCreateCollection, colOrder, onReorderCollections, onUpdateCollection, onDeleteCollection }) {
+function Admin({ dbProducts, onUpdateStock, onUpdatePrice, onUpdateProduct, onCreateProduct, collections, onCreateCollection, colOrder, onReorderCollections, onUpdateCollection, onDeleteCollection, onDeleteProduct, onSaveProducts }) {
   const [tab, setTab] = useState("stock");
   const [editingId, setEditingId] = useState(null);
   const [creating, setCreating] = useState(false);
@@ -1089,23 +1186,16 @@ function Admin({ dbProducts, onUpdateStock, onUpdatePrice, onUpdateProduct, onCr
   const no = dbProducts.filter(p => p.stock === 0).length;
   const tv = dbProducts.reduce((s, p) => s + Number(p.precio) * p.stock, 0);
 
-  const handleSaveProduct = async (id, data) => {
-    await onUpdateProduct(id, data);
+  const handleSaveProducts = async (_, rowsToSave) => {
+    if (onSaveProducts) {
+      await onSaveProducts(rowsToSave);
+    }
     setEditingId(null);
-    setSaveMsg("Cambios guardados");
+    setCreating(false);
+    setSaveMsg("Producto(s) guardado(s)");
     setTimeout(() => setSaveMsg(""), 2500);
   };
 
-  const handleCreateProduct = async (_, data) => {
-    const cleanModel = data.modelo.toLowerCase().trim().replace(/\s+/g, '_');
-    const cleanColor = data.variantes_de_color.toLowerCase().trim().replace(/\s+/g, '_');
-    const newId = `${cleanModel}-${cleanColor}`;
-    
-    await onCreateProduct({ ...data, id: newId });
-    setCreating(false);
-    setSaveMsg("Producto creado");
-    setTimeout(() => setSaveMsg(""), 2500);
-  };
 
   const handleCreateCollection = async (data) => {
     await onCreateCollection(data);
@@ -1277,14 +1367,36 @@ function Admin({ dbProducts, onUpdateStock, onUpdatePrice, onUpdateProduct, onCr
           {creating ? (
             <ProductEditor
               product={null}
-              onSave={handleCreateProduct}
+              onSave={handleSaveProducts}
               onCancel={() => setCreating(false)}
               collections={collections}
             />
           ) : editingId ? (
             <ProductEditor
-              product={dbProducts.find(p => p.id === editingId)}
-              onSave={handleSaveProduct}
+              product={(() => {
+                const target = dbProducts.find(p => p.id === editingId);
+                if (!target) return null;
+                const siblings = dbProducts.filter(p => p.modelo === target.modelo);
+                return {
+                  id: target.modelo.toLowerCase().trim().replace(/\s+/g, '_'),
+                  name: target.modelo,
+                  col: target.coleccion,
+                  style: target.estilo,
+                  price: target.precio,
+                  orden: target.orden,
+                  desc: target.descripcion,
+                  note: target.nota,
+                  en_rebaja: target.en_rebaja,
+                  descuento_porcentaje: target.descuento_porcentaje,
+                  variants: siblings.map(s => ({
+                    id: s.id,
+                    c: s.variantes_de_color === "Único" ? "" : s.variantes_de_color,
+                    stock: s.stock,
+                    imgs: Array.isArray(s.images_url) ? s.images_url : (typeof s.images_url === "string" ? (() => { try { return JSON.parse(s.images_url) } catch { return [s.images_url] } })() : [])
+                  }))
+                };
+              })()}
+              onSave={handleSaveProducts}
               onCancel={() => setEditingId(null)}
               collections={collections}
             />
@@ -1317,18 +1429,32 @@ function Admin({ dbProducts, onUpdateStock, onUpdatePrice, onUpdateProduct, onCr
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <p style={{ fontWeight: 600, fontSize: 14, color: "#1a1612", marginBottom: 2 }}>
-                          {p.modelo} {p.en_rebaja && <span style={{ background: "#fee2e2", color: "#b91c1c", fontSize: 10, padding: "2px 6px", borderRadius: 6, marginLeft: 6, fontWeight: 700 }}>{p.descuento_porcentaje}% OFF</span>}
+                          {p.modelo} {p.en_rebaja && <span style={{ background: "#f0ebe3", color: "#5c534a", fontSize: 10, padding: "2px 6px", borderRadius: 6, marginLeft: 6, fontWeight: 700 }}>{p.descuento_porcentaje}% OFF</span>}
                         </p>
                         <p style={{ fontSize: 12, color: "#a09890" }}>{p.coleccion} · {p.estilo} {p.variantes_de_color !== "Único" ? `· ${p.variantes_de_color}` : ""}</p>
                       </div>
                       <div style={{ textAlign: "right", flexShrink: 0 }}>
-                        <p style={{ fontWeight: 600, fontSize: 14, color: p.en_rebaja ? "#b91c1c" : "#1a1612", marginBottom: 4 }}>
+                        <p style={{ fontWeight: 600, fontSize: 14, color: "#1a1612", marginBottom: 4 }}>
                           {priceLabel}
                           {p.en_rebaja && <span style={{ fontSize: 11, textDecoration: "line-through", color: "#a09890", marginLeft: 6, fontWeight: 400 }}>{fmt(p.precio)}</span>}
                         </p>
                         <p style={{ fontSize: 11, color: "#a09890" }}>Stock: {p.stock}</p>
                       </div>
-                      <button onClick={() => setEditingId(p.id)} className="bol" style={{ padding: "8px 16px", fontSize: 12, flexShrink: 0, marginLeft: 8 }}>Editar</button>
+                      <div style={{ display: "flex", gap: 6, flexShrink: 0, marginLeft: 8 }}>
+                        <button onClick={() => setEditingId(p.id)} className="bol" style={{ padding: "8px 14px", fontSize: 12 }}>Editar</button>
+                        <button
+                          onClick={() => {
+                            if (window.confirm(`¿Estás segura de que querés eliminar "${p.modelo}"${p.variantes_de_color !== "Único" ? ` (${p.variantes_de_color})` : ""}?\n\nEsta acción no se puede deshacer.`)) {
+                              onDeleteProduct && onDeleteProduct(p.id);
+                            }
+                          }}
+                          className="bol"
+                          style={{ padding: "8px 14px", fontSize: 12, borderColor: "#fca5a5", color: "#dc2626" }}
+                          title="Eliminar producto"
+                        >
+                          Eliminar
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
@@ -1601,6 +1727,40 @@ export default function App() {
     }
   };
 
+  const saveProducts = async (rows) => {
+    try {
+      const modelName = rows[0].modelo;
+      const { data: existingRows } = await supabase.from("products").select("id").eq("modelo", modelName);
+      const newIds = rows.map(r => r.id).filter(Boolean);
+      
+      if (existingRows) {
+        const idsToDelete = existingRows.map(r => r.id).filter(id => !newIds.includes(id));
+        if (idsToDelete.length > 0) {
+          await supabase.from("products").delete().in("id", idsToDelete);
+        }
+      }
+
+      const cleanModel = modelName.toLowerCase().trim().replace(/\s+/g, '_');
+      let counter = 1;
+      const rowsToUpsert = rows.map(r => {
+        let finalId = r.id;
+        if (!finalId) {
+          const cleanColor = r.variantes_de_color.toLowerCase().trim().replace(/\s+/g, '_');
+          // Para evitar colisiones si se crean dos sin nombre de color
+          finalId = `${cleanModel}-${cleanColor || `color${counter++}`}`;
+        }
+        return { ...r, id: finalId };
+      });
+
+      const { error } = await supabase.from("products").upsert(rowsToUpsert);
+      if (error) throw error;
+      await fetchProducts();
+    } catch (err) {
+      console.error("Error guardando productos en Supabase:", err);
+      alert("Error al guardar los productos: " + (err.message || JSON.stringify(err)));
+    }
+  };
+
   const createCollection = async (data) => {
     // Agregamos la colección nueva al estado local y la persistimos
     setExtraCollections(prev => {
@@ -1703,6 +1863,18 @@ export default function App() {
     }
   };
 
+  const deleteProduct = async (id) => {
+    setDbProducts(prev => prev.filter(p => p.id !== id));
+    try {
+      const { error } = await supabase.from("products").delete().eq("id", id);
+      if (error) throw error;
+    } catch (err) {
+      console.error("Error eliminando producto:", err);
+      alert("Error al eliminar el producto: " + (err.message || JSON.stringify(err)));
+      fetchProducts();
+    }
+  };
+
   const add = (product, variant) => {
     const img = variant.imgs[0];
     const vc = variant.c || "";
@@ -1746,9 +1918,45 @@ export default function App() {
     return merged;
   }, [dbProducts, extraCollections, colOrder, collectionDescriptions]);
 
-  const handleReorderCollections = (newOrder) => {
+  const handleReorderCollections = async (newOrder) => {
     setColOrder(newOrder);
     localStorage.setItem("mallette_col_order", JSON.stringify(newOrder));
+
+    // Persistir el orden en Supabase para que sea permanente para todos los usuarios y al refrescar
+    try {
+      const updates = [];
+      newOrder.forEach((colId, colIndex) => {
+        const colObj = allCollections.find(c => c.id === colId);
+        const colName = colObj ? colObj.name : colId;
+        
+        // Obtener productos de esta colección
+        const colProducts = dbProducts.filter(p => {
+          const pColId = getCollectionId(p.coleccion, allCollections);
+          return pColId === colId || p.coleccion === colName;
+        });
+
+        colProducts.forEach((p, itemIdx) => {
+          const newOrderVal = (colIndex + 1) * 100 + itemIdx;
+          updates.push({ id: p.id, orden: newOrderVal });
+        });
+      });
+
+      if (updates.length > 0) {
+        // Actualizar estado local
+        setDbProducts(prev => {
+          const map = new Map(updates.map(u => [u.id, u.orden]));
+          return prev.map(p => map.has(p.id) ? { ...p, orden: map.get(p.id) } : p)
+                     .sort((a, b) => (a.orden || 0) - (b.orden || 0));
+        });
+
+        // Guardar en Supabase para cada producto
+        await Promise.all(
+          updates.map(u => supabase.from("products").update({ orden: u.orden }).eq("id", u.id))
+        );
+      }
+    } catch (err) {
+      console.error("Error guardando orden de colecciones en BD:", err);
+    }
   };
 
   const groupedProducts = useMemo(() => groupProducts(dbProducts, allCollections), [dbProducts, allCollections]);
@@ -1785,7 +1993,7 @@ export default function App() {
       {view === "admin" && (
         user
           ? (ADMIN_EMAILS.includes(user.email)
-              ? <Admin dbProducts={dbProducts} onUpdateStock={updateStock} onUpdatePrice={updatePrice} onUpdateProduct={updateProduct} onCreateProduct={createProduct} collections={allCollections} onCreateCollection={createCollection} colOrder={colOrder} onReorderCollections={handleReorderCollections} onUpdateCollection={updateCollection} onDeleteCollection={deleteCollection} />
+              ? <Admin dbProducts={dbProducts} onUpdateStock={updateStock} onUpdatePrice={updatePrice} onUpdateProduct={updateProduct} onCreateProduct={createProduct} collections={allCollections} onCreateCollection={createCollection} colOrder={colOrder} onReorderCollections={handleReorderCollections} onUpdateCollection={updateCollection} onDeleteCollection={deleteCollection} onDeleteProduct={deleteProduct} onSaveProducts={saveProducts} />
               : null)
           : <AdminLogin onLogin={loginWithGoogle} />
       )}
