@@ -40,7 +40,9 @@ const getCollectionId = (name, cols) => {
 const groupProducts = (dbRows, cols) => {
   const grouped = [];
   const map = {};
-  dbRows.forEach(row => {
+  // Filtrar productos ocultos (visible = false) — solo para la vista pública
+  const visibleRows = dbRows.filter(row => row.visible !== false);
+  visibleRows.forEach(row => {
     const modelName = row.modelo;
     const baseId = row.id.split("-")[0];
     
@@ -85,16 +87,15 @@ const groupProducts = (dbRows, cols) => {
       stock: row.stock,
       imgs: imgs,
       en_rebaja: row.en_rebaja || false,
-      descuento_porcentaje: Number(row.descuento_porcentaje || 0)
+      descuento_porcentaje: Number(row.descuento_porcentaje || 0),
+      variant_order: row.variant_order !== undefined ? row.variant_order : 0
     });
   });
 
-  // Auto-selección: poner variants con stock primero, sin stock al final
+  // Respetar el orden manual (variant_order) — NO auto-ordenar por stock
   grouped.forEach(p => {
-    const inStock = p.variants.filter(v => v.stock > 0);
-    const noStock = p.variants.filter(v => v.stock === 0);
-    p.variants = [...inStock, ...noStock];
-    // El stock/precio del producto refleja la variante con prioridad (con stock)
+    p.variants.sort((a, b) => a.variant_order - b.variant_order);
+    // El stock/precio del producto refleja la primera variante (orden manual)
     const lead = p.variants[0];
     if (lead) {
       p.stock = lead.stock;
@@ -109,7 +110,6 @@ function Carousel({ imgs, onZoom }) {
   const [idx, setIdx] = useState(0);
   const [hoverPrev, setHoverPrev] = useState(false);
   const [hoverNext, setHoverNext] = useState(false);
-  const [hoverZoom, setHoverZoom] = useState(false);
   const t = useRef(null);
 
   if (!imgs || !imgs.length) return null;
@@ -124,8 +124,18 @@ function Carousel({ imgs, onZoom }) {
       onTouchStart={e => { t.current = e.touches[0].clientX; }}
       onTouchEnd={e => { const dx = e.changedTouches[0].clientX - t.current; if (dx < -40) go(idx + 1); if (dx > 40) go(idx - 1); }}>
 
-      {/* Imagen principal */}
-      <img key={imgs[idx]} src={imgs[idx]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", animation: "fI .25s ease" }} />
+      {/* Imagen principal — clickeable para ampliar */}
+      <img
+        key={imgs[idx]}
+        src={imgs[idx]}
+        alt=""
+        onClick={onZoom ? () => onZoom(imgs[idx]) : undefined}
+        style={{
+          width: "100%", height: "100%", objectFit: "cover",
+          animation: "fI .25s ease",
+          cursor: onZoom ? "zoom-in" : "default"
+        }}
+      />
 
       {/* Flecha izquierda */}
       {imgs.length > 1 && idx > 0 && (
@@ -142,18 +152,6 @@ function Carousel({ imgs, onZoom }) {
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={hoverNext ? "#faf8f5" : "#1a1612"} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
         </button>
       )}
-
-      {/* Zoom — esquina superior derecha */}
-      {onZoom && (
-        <button onClick={e => { e.stopPropagation(); onZoom(imgs[idx]); }} onMouseEnter={() => setHoverZoom(true)} onMouseLeave={() => setHoverZoom(false)} title="Ampliar"
-          style={{ position: "absolute", top: 12, right: 12, width: 32, height: 32, borderRadius: "50%", background: hoverZoom ? "#1a1612" : "rgba(250,248,245,0.92)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 10px rgba(0,0,0,0.12)", transition: "background .2s", zIndex: 2 }}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={hoverZoom ? "#faf8f5" : "#1a1612"} strokeWidth="2.5">
-            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-            <line x1="11" y1="8" x2="11" y2="14" /><line x1="8" y1="11" x2="14" y2="11" />
-          </svg>
-        </button>
-      )}
-
 
       {/* Indicador de puntitos con barra de vidrio esmerilado */}
       {imgs.length > 1 && (
@@ -365,15 +363,17 @@ function Modal({ p, onClose, onAdd, onZoom, collections }) {
           <Carousel imgs={v.imgs} onZoom={onZoom} />
           <div className="modal-info-side">
             <div>
+              {/* Encabezado: badge colección + botón cerrar */}
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
                 <span className={"cb " + badgeClass}>{col?.name}</span>
                 <button onClick={onClose} style={{ width: 44, height: 44, borderRadius: "50%", padding: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 700, background: "#1a1612", color: "#fff", border: "none", cursor: "pointer", flexShrink: 0 }}>x</button>
               </div>
+
+              {/* Nombre y estilo */}
               <h2 className="serif" style={{ fontSize: 26, fontWeight: 400, marginBottom: 4 }}>{p.name}</h2>
               <p style={{ fontSize: 12, color: "#a09890", marginBottom: 14 }}>{p.style}</p>
-              <p style={{ fontSize: 13, color: "#5c534a", lineHeight: 1.75, marginBottom: 14, whiteSpace: "pre-line" }}>{p.desc?.replace(/\\n/g, "\n")}</p>
-              {p.note && <div style={{ background: "#f0ebe3", borderRadius: 10, padding: "9px 14px", marginBottom: 12, fontSize: 12, color: "#8b6914", fontWeight: 500 }}>* {p.note}</div>}
 
+              {/* 1. SELECTOR DE COLOR — aparece primero */}
               {hasColors && (
                 <div style={{ marginBottom: 16 }}>
                   <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 10, paddingBottom: 6, borderBottom: "2px solid #c9a96e" }}>
@@ -381,7 +381,7 @@ function Modal({ p, onClose, onAdd, onZoom, collections }) {
                     <p style={{ fontSize: 13, color: "#1a1612", fontWeight: 500 }}>{v.c || ""}</p>
                     {v.stock === 0 && <span style={{ fontSize: 11, color: "#a09890", fontStyle: "italic" }}>(sin stock)</span>}
                   </div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
                     {p.variants.map((vv, i) => {
                       const selected = i === selV;
                       const sinStock = vv.stock === 0;
@@ -392,9 +392,9 @@ function Modal({ p, onClose, onAdd, onZoom, collections }) {
                           title={vv.c + (sinStock ? " — Sin stock" : "")}
                           style={{
                             position: "relative",
-                            width: 56,
-                            height: 56,
-                            borderRadius: 10,
+                            width: 76,
+                            height: 76,
+                            borderRadius: 12,
                             overflow: "hidden",
                             border: selected ? "2.5px solid #1a1612" : "2px solid transparent",
                             boxShadow: selected ? "0 0 0 3px rgba(201,169,110,0.45)" : "0 1px 4px rgba(0,0,0,0.10)",
@@ -415,8 +415,8 @@ function Modal({ p, onClose, onAdd, onZoom, collections }) {
                           )}
                           {/* Tick de seleccionado */}
                           {selected && !sinStock && (
-                            <div style={{ position: "absolute", bottom: 3, right: 3, width: 16, height: 16, borderRadius: "50%", background: "#1a1612", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                              <svg width="9" height="9" viewBox="0 0 10 10" fill="none"><polyline points="1.5,5 4,7.5 8.5,2" stroke="#faf8f5" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                            <div style={{ position: "absolute", bottom: 4, right: 4, width: 18, height: 18, borderRadius: "50%", background: "#1a1612", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><polyline points="1.5,5 4,7.5 8.5,2" stroke="#faf8f5" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
                             </div>
                           )}
                         </button>
@@ -426,6 +426,13 @@ function Modal({ p, onClose, onAdd, onZoom, collections }) {
                 </div>
               )}
 
+              {/* 2. NOTA del producto */}
+              {p.note && <div style={{ background: "#f0ebe3", borderRadius: 10, padding: "9px 14px", marginBottom: 12, fontSize: 12, color: "#8b6914", fontWeight: 500 }}>* {p.note}</div>}
+
+              {/* 3. DESCRIPCIÓN */}
+              <p style={{ fontSize: 13, color: "#5c534a", lineHeight: 1.75, marginBottom: 14, whiteSpace: "pre-line" }}>{p.desc?.replace(/\\n/g, "\n")}</p>
+
+              {/* 4. PRECIO */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderTop: "1px solid #f0ebe3", borderBottom: "1px solid #f0ebe3", marginBottom: 16 }}>
                 <span style={{ fontSize: 11, color: "#a09890", letterSpacing: ".06em", textTransform: "uppercase" }}>Precio</span>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
@@ -491,9 +498,6 @@ function Card({ p, onAdd, onOpen, delay, collections }) {
           <div style={{ position: "absolute", top: 10, left: 10, background: "#1a1612", color: "#faf8f5", fontSize: 10, fontWeight: 700, padding: "3px 9px", borderRadius: 100, letterSpacing: ".04em" }}>
             {descuento}% OFF
           </div>
-        )}
-        {stock <= 3 && stock > 0 && (
-          <div style={{ position: "absolute", top: enRebaja ? 36 : 10, left: 10, background: "rgba(254,243,199,.95)", color: "#b45309", fontSize: 10, fontWeight: 600, padding: "3px 9px", borderRadius: 100 }}>Ultimas {stock}</div>
         )}
         {stock === 0 && <div style={{ position: "absolute", inset: 0, background: "rgba(250,248,245,.7)", display: "flex", alignItems: "center", justifyContent: "center" }}><span style={{ background: "#1a1612", color: "#faf8f5", fontSize: 11, letterSpacing: ".1em", padding: "8px 18px", borderRadius: 100 }}>SIN STOCK</span></div>}
       </div>
@@ -654,33 +658,6 @@ function Shop({ products, onAdd, collections }) {
             </div>
           </div>
         ))}
-      </div>
-
-      <div style={{ background: "#fff", borderTop: "1px solid #ede8e0", padding: "48px 16px" }}>
-        <div style={{ maxWidth: 900, margin: "0 auto" }}>
-          <h2 className="serif" style={{ fontSize: 22, fontWeight: 400, textAlign: "center", color: "#1a1612", letterSpacing: ".06em", marginBottom: 36 }}>Por que elegirnos</h2>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(160px,1fr))", gap: 24 }}>
-            {[
-              { icon: "envios", t: "Envios a todo el pais", d: "Por Correo Argentino" },
-              { icon: "pago", t: "Transferencia bancaria", d: "Medio de pago disponible" },
-              { icon: "diseno", t: "Diseno y elegancia", d: "Modelos seleccionados con foco en moda" },
-              { icon: "arg", t: "Hecho en Argentina", d: "Modelos artesanales de cuero nacional" },
-              { icon: "calidad", t: "Cuero de alta calidad", d: "Disponible en colecciones seleccionadas" },
-            ].map((b, i) => (
-              <div key={i} style={{ textAlign: "center", padding: "20px 12px", borderRadius: 16, border: "1px solid #f0ebe3", background: "#faf8f5" }}>
-                <div style={{ width: 48, height: 48, background: "linear-gradient(135deg,#c9a96e,#e8c97a)", borderRadius: "50%", margin: "0 auto 12px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>
-                  {b.icon === "envios" && <svg width="22" height="22" fill="none" stroke="#1a1612" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h11a2 2 0 012 2v3" /><rect x="9" y="11" width="14" height="10" rx="2" /><path d="m13 16 2 2 4-4" /></svg>}
-                  {b.icon === "pago" && <svg width="22" height="22" fill="none" stroke="#1a1612" strokeWidth="1.8" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" /></svg>}
-                  {b.icon === "diseno" && <svg width="22" height="22" fill="none" stroke="#1a1612" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>}
-                  {b.icon === "arg" && <svg width="22" height="22" fill="none" stroke="#1a1612" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></svg>}
-                  {b.icon === "calidad" && <svg width="22" height="22" fill="none" stroke="#1a1612" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" /></svg>}
-                </div>
-                <p style={{ fontSize: 13, fontWeight: 600, color: "#1a1612", marginBottom: 4 }}>{b.t}</p>
-                <p style={{ fontSize: 11, color: "#78716c" }}>{b.d}</p>
-              </div>
-            ))}
-          </div>
-        </div>
       </div>
 
       <div style={{ background: "linear-gradient(135deg,#1a0f08,#2c1a0e 50%,#1a0f08)", padding: "64px 16px", position: "relative", overflow: "hidden" }}>
@@ -847,10 +824,10 @@ function CollectionEditor({ onSave, onCancel, collection }) {
 }
 
 // ─── Editor de Producto ───────────────────────────────────────────────────────
-// Subcomponente para una sola variante de color
-function ColorVariantBlock({ variant, idx, total, onUpdate, onRemove, uploadingIdx, setUploadingIdx }) {
+function ColorVariantBlock({ variant, idx, total, onUpdate, onRemove, onMoveUp, onMoveDown, uploadingIdx, setUploadingIdx }) {
   const fileRef = useRef(null);
   const [newUrl, setNewUrl] = useState("");
+  const [draggedImg, setDraggedImg] = useState(null);
 
   const BUCKET_URL = "https://ioldkkknswpgiblmtnor.supabase.co/storage/v1/object/public/fotos/";
 
@@ -908,7 +885,11 @@ function ColorVariantBlock({ variant, idx, total, onUpdate, onRemove, uploadingI
           {variant.stock === 0 && <span style={{ fontSize: 10, background: "#fef2f2", color: "#dc2626", padding: "2px 6px", borderRadius: 6, fontWeight: 600 }}>Sin stock</span>}
         </div>
         {total > 1 && (
-          <button onClick={() => onRemove(idx)} style={{ background: "none", border: "none", cursor: "pointer", color: "#a09890", fontSize: 18, lineHeight: 1, padding: 4 }} title="Quitar este color">×</button>
+          <div style={{ display: "flex", gap: 4 }}>
+            <button onClick={() => onMoveUp(idx)} disabled={idx === 0} style={{ background: "none", border: "none", cursor: idx === 0 ? "not-allowed" : "pointer", color: "#a09890", fontSize: 16, padding: 4, opacity: idx === 0 ? 0.3 : 1 }} title="Subir">↑</button>
+            <button onClick={() => onMoveDown(idx)} disabled={idx === total - 1} style={{ background: "none", border: "none", cursor: idx === total - 1 ? "not-allowed" : "pointer", color: "#a09890", fontSize: 16, padding: 4, opacity: idx === total - 1 ? 0.3 : 1 }} title="Bajar">↓</button>
+            <button onClick={() => onRemove(idx)} style={{ background: "none", border: "none", cursor: "pointer", color: "#a09890", fontSize: 18, lineHeight: 1, padding: 4, marginLeft: 4 }} title="Quitar este color">×</button>
+          </div>
         )}
       </div>
 
@@ -939,8 +920,28 @@ function ColorVariantBlock({ variant, idx, total, onUpdate, onRemove, uploadingI
         <label style={labelStyle}>Fotos de este color</label>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
           {variant.imgs.map((url, i) => (
-            <div key={i} style={{ position: "relative", width: 56, height: 56 }}>
-              <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 8, border: "1px solid #ede8e0" }} />
+            <div key={i} 
+              draggable={true}
+              onDragStart={(e) => setDraggedImg(i)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                if (draggedImg === null || draggedImg === i) return;
+                const arr = [...variant.imgs];
+                const item = arr.splice(draggedImg, 1)[0];
+                arr.splice(i, 0, item);
+                onUpdate(idx, "imgs", arr);
+                setDraggedImg(null);
+              }}
+              style={{ position: "relative", width: 56, height: 56, cursor: "grab" }}>
+              <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 8, border: "1px solid #ede8e0", pointerEvents: "none" }} />
+              {i !== 0 && (
+                <button onClick={() => {
+                  const arr = [...variant.imgs];
+                  const item = arr.splice(i, 1)[0];
+                  arr.unshift(item);
+                  onUpdate(idx, "imgs", arr);
+                }} style={{ position: "absolute", bottom: -5, left: -5, width: 16, height: 16, borderRadius: "50%", background: "#f59e0b", border: "none", cursor: "pointer", color: "#fff", fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }} title="Fijar como portada">★</button>
+              )}
               <button onClick={() => removeImg(i)} style={{ position: "absolute", top: -5, right: -5, width: 16, height: 16, borderRadius: "50%", background: "#ef4444", border: "none", cursor: "pointer", color: "#fff", fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, lineHeight: 1, padding: 0 }}>×</button>
             </div>
           ))}
@@ -1010,6 +1011,14 @@ function ProductEditor({ product, onSave, onCancel, collections }) {
 
   const [saving, setSaving] = useState(false);
   const [uploadingIdx, setUploadingIdx] = useState(null);
+  const [publicarIndependientes, setPublicarIndependientes] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
+
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 640);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
 
   const upd = (k, v) => setForm(f => ({ ...f, [k]: v }));
   
@@ -1024,6 +1033,24 @@ function ProductEditor({ product, onSave, onCancel, collections }) {
   const removeVariant = (idx) => {
     if (variants.length <= 1) return;
     setVariants(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const moveVariantUp = (idx) => {
+    if (idx === 0) return;
+    setVariants(prev => {
+      const arr = [...prev];
+      [arr[idx-1], arr[idx]] = [arr[idx], arr[idx-1]];
+      return arr;
+    });
+  };
+
+  const moveVariantDown = (idx) => {
+    if (idx === variants.length - 1) return;
+    setVariants(prev => {
+      const arr = [...prev];
+      [arr[idx], arr[idx+1]] = [arr[idx+1], arr[idx]];
+      return arr;
+    });
   };
 
   const handleSave = async () => {
@@ -1047,19 +1074,17 @@ function ProductEditor({ product, onSave, onCancel, collections }) {
 
       const rowsToSave = variants.map((v, i) => {
         const colorVal = v.colorName.trim();
-        const finalColor = colorVal || (isMulti ? `Color ${i+1}` : "Único");
+        const finalColor = publicarIndependientes ? "Único" : (colorVal || (isMulti ? `Color ${i+1}` : "Único"));
         return {
           ...baseData,
           id: v.id || null, // Si es null, el padre decidirá crear un id
           variantes_de_color: finalColor,
           stock: Number(v.stock) || 0,
-          images_url: v.imgs
+          images_url: v.imgs,
+          variant_order: i
         };
       });
 
-      // El prop onSave original de App espera (id, data) o (_, data) para crear UN producto.
-      // Modificaremos la lógica del padre App para que onSave sea onSaveProducts y reciba el array,
-      // pero por ahora, si el parent espera multi-save lo llamamos con el array.
       if (typeof onSave === 'function') {
          await onSave(product?.id || product?.name, rowsToSave);
       }
@@ -1083,7 +1108,7 @@ function ProductEditor({ product, onSave, onCancel, collections }) {
         <button onClick={onCancel} style={{ background: "none", border: "none", cursor: "pointer", color: "#a09890", fontSize: 20, lineHeight: 1 }}>×</button>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 14, marginBottom: 14 }}>
         <div>
           <label style={labelStyle}>Nombre del modelo</label>
           <input style={inputStyle} value={form.modelo} onChange={e => upd("modelo", e.target.value)} />
@@ -1151,6 +1176,8 @@ function ProductEditor({ product, onSave, onCancel, collections }) {
               total={variants.length}
               onUpdate={updateVariant}
               onRemove={removeVariant}
+              onMoveUp={moveVariantUp}
+              onMoveDown={moveVariantDown}
               uploadingIdx={uploadingIdx}
               setUploadingIdx={setUploadingIdx}
             />
@@ -1162,7 +1189,14 @@ function ProductEditor({ product, onSave, onCancel, collections }) {
         </button>
       </div>
 
-      <div style={{ display: "flex", gap: 10 }}>
+      {variants.length > 1 && (
+        <div style={{ marginBottom: 20, display: "flex", alignItems: "center", gap: 8 }}>
+          <input type="checkbox" id="pubInd" checked={publicarIndependientes} onChange={e => setPublicarIndependientes(e.target.checked)} style={{ width: 16, height: 16, cursor: "pointer" }} />
+          <label htmlFor="pubInd" style={{ fontSize: 13, color: "#1a1612", cursor: "pointer", fontWeight: 500 }}>📦 Publicar cada color como producto independiente (crea un producto separado por color)</label>
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 10, flexDirection: isMobile ? "column" : "row" }}>
         <button onClick={handleSave} disabled={saving || uploadingIdx !== null} className="bdk" style={{ flex: 1, padding: "12px", fontSize: 13 }}>
           {saving ? "Guardando..." : "Guardar Producto"}
         </button>
@@ -1173,13 +1207,21 @@ function ProductEditor({ product, onSave, onCancel, collections }) {
 }
 
 
-function Admin({ dbProducts, onUpdateStock, onUpdatePrice, onUpdateProduct, onCreateProduct, collections, onCreateCollection, colOrder, onReorderCollections, onUpdateCollection, onDeleteCollection, onDeleteProduct, onSaveProducts }) {
+function Admin({ dbProducts, onUpdateStock, onUpdatePrice, onUpdateProduct, onCreateProduct, collections, onCreateCollection, colOrder, onReorderCollections, onUpdateCollection, onDeleteCollection, onDeleteProduct, onSaveProducts, onToggleVisible }) {
   const [tab, setTab] = useState("stock");
   const [editingId, setEditingId] = useState(null);
   const [creating, setCreating] = useState(false);
   const [creatingCollection, setCreatingCollection] = useState(false);
   const [editingCollectionObj, setEditingCollectionObj] = useState(null);
   const [saveMsg, setSaveMsg] = useState("");
+  const [visFilter, setVisFilter] = useState("todos");
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
+  
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 640);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
   
   const ts = dbProducts.reduce((s, p) => s + p.stock, 0);
   const lo = dbProducts.filter(p => p.stock > 0 && p.stock <= 3).length;
@@ -1291,7 +1333,7 @@ function Admin({ dbProducts, onUpdateStock, onUpdatePrice, onUpdateProduct, onCr
                         <img src={imgUrl} alt={p.modelo} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                       </div>
                       <div style={{ flex: 1 }}>
-                        <p style={{ fontWeight: 500, fontSize: 13 }}>{p.modelo} {p.variantes_de_color !== "Único" ? `(${p.variantes_de_color})` : ""}</p>
+                        <p style={{ fontWeight: 500, fontSize: 13 }}>{p.modelo} {p.variantes_de_color !== "Único" && <span style={{ background: "#f0ebe3", padding: "2px 6px", borderRadius: 6, fontSize: 11, color: "#8b6914", marginLeft: 6 }}>{p.variantes_de_color}</span>}</p>
                         <p style={{ fontSize: 11, color: "#c9a96e" }}>{fmt(p.precio)}</p>
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
@@ -1402,16 +1444,27 @@ function Admin({ dbProducts, onUpdateStock, onUpdatePrice, onUpdateProduct, onCr
             />
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-                <button onClick={() => setCreatingCollection(true)} className="bol" style={{ padding: "10px 20px", fontSize: 13, display: "flex", alignItems: "center", gap: 6, border: "1px solid #c9a96e", color: "#c9a96e" }}>
-                  <span style={{ fontSize: 15, fontWeight: 700 }}>+</span> Nueva Colección
-                </button>
-                <button onClick={() => setCreating(true)} className="bdk" style={{ padding: "10px 20px", fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ fontSize: 15, fontWeight: 700 }}>+</span> Nuevo Producto
-                </button>
+              <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={() => setVisFilter("todos")} className={"ch " + (visFilter === "todos" ? "con" : "cof")}>Todos</button>
+                  <button onClick={() => setVisFilter("visibles")} className={"ch " + (visFilter === "visibles" ? "con" : "cof")}>Visibles</button>
+                  <button onClick={() => setVisFilter("ocultos")} className={"ch " + (visFilter === "ocultos" ? "con" : "cof")}>Ocultos</button>
+                </div>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button onClick={() => setCreatingCollection(true)} className="bol" style={{ padding: "10px 20px", fontSize: 13, display: "flex", alignItems: "center", gap: 6, border: "1px solid #c9a96e", color: "#c9a96e" }}>
+                    <span style={{ fontSize: 15, fontWeight: 700 }}>+</span> Nueva Colección
+                  </button>
+                  <button onClick={() => setCreating(true)} className="bdk" style={{ padding: "10px 20px", fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: 15, fontWeight: 700 }}>+</span> Nuevo Producto
+                  </button>
+                </div>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {dbProducts.map(p => {
+                {dbProducts.filter(p => {
+                  if (visFilter === "visibles") return p.visible !== false;
+                  if (visFilter === "ocultos") return p.visible === false;
+                  return true;
+                }).map(p => {
                   let imgUrl = "";
                   if (Array.isArray(p.images_url) && p.images_url.length > 0) {
                     imgUrl = p.images_url[0];
@@ -1429,6 +1482,7 @@ function Admin({ dbProducts, onUpdateStock, onUpdatePrice, onUpdateProduct, onCr
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <p style={{ fontWeight: 600, fontSize: 14, color: "#1a1612", marginBottom: 2 }}>
+                          {p.visible !== false ? "🟢 " : "🔴 "}
                           {p.modelo} {p.en_rebaja && <span style={{ background: "#f0ebe3", color: "#5c534a", fontSize: 10, padding: "2px 6px", borderRadius: 6, marginLeft: 6, fontWeight: 700 }}>{p.descuento_porcentaje}% OFF</span>}
                         </p>
                         <p style={{ fontSize: 12, color: "#a09890" }}>{p.coleccion} · {p.estilo} {p.variantes_de_color !== "Único" ? `· ${p.variantes_de_color}` : ""}</p>
@@ -1440,7 +1494,20 @@ function Admin({ dbProducts, onUpdateStock, onUpdatePrice, onUpdateProduct, onCr
                         </p>
                         <p style={{ fontSize: 11, color: "#a09890" }}>Stock: {p.stock}</p>
                       </div>
-                      <div style={{ display: "flex", gap: 6, flexShrink: 0, marginLeft: 8 }}>
+                      <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 6, flexShrink: 0, marginLeft: 8 }}>
+                        <button 
+                          onClick={() => onToggleVisible && onToggleVisible(p.id, p.visible !== false)} 
+                          className="bol" 
+                          style={{ 
+                            padding: "8px 14px", 
+                            fontSize: 12, 
+                            color: p.visible !== false ? '#d97706' : '#16a34a', 
+                            borderColor: p.visible !== false ? '#fcd34d' : '#bbf7d0',
+                            background: p.visible !== false ? '#fffbeb' : '#f0fdf4'
+                          }}
+                        >
+                          {p.visible !== false ? 'Ocultar' : 'Mostrar'}
+                        </button>
                         <button onClick={() => setEditingId(p.id)} className="bol" style={{ padding: "8px 14px", fontSize: 12 }}>Editar</button>
                         <button
                           onClick={() => {
@@ -1478,7 +1545,6 @@ function Admin({ dbProducts, onUpdateStock, onUpdatePrice, onUpdateProduct, onCr
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {orderedCollections.map((col, idx) => {
-              const isDefault = DEFAULT_COLS.some(d => d.id === col.id);
               return (
                 <div key={col.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#faf8f5", border: "1px solid #ede8e0", borderRadius: 12, padding: "12px 18px" }}>
                   <div style={{ flex: 1, marginRight: 16 }}>
@@ -1493,15 +1559,13 @@ function Admin({ dbProducts, onUpdateStock, onUpdatePrice, onUpdateProduct, onCr
                     >
                       Editar
                     </button>
-                    {!isDefault && (
-                      <button 
-                        onClick={() => onDeleteCollection && onDeleteCollection(col.name, col.id)} 
-                        className="bol" 
-                        style={{ padding: "6px 12px", fontSize: 12, borderColor: "#fca5a5", color: "#dc2626" }}
-                      >
-                        Borrar
-                      </button>
-                    )}
+                    <button 
+                      onClick={() => onDeleteCollection && onDeleteCollection(col.name, col.id)} 
+                      className="bol" 
+                      style={{ padding: "6px 12px", fontSize: 12, borderColor: "#fca5a5", color: "#dc2626" }}
+                    >
+                      Borrar
+                    </button>
                     <div style={{ width: 1, height: 20, background: "#ede8e0", margin: "0 4px" }} />
                     <button 
                       onClick={() => moveCol(idx, -1)} 
@@ -1863,6 +1927,18 @@ export default function App() {
     }
   };
 
+  const toggleVisible = async (id, currentVisible) => {
+    const newVisible = currentVisible === false ? true : false;
+    setDbProducts(prev => prev.map(p => p.id === id ? { ...p, visible: newVisible } : p));
+    try {
+      const { error } = await supabase.from("products").update({ visible: newVisible }).eq("id", id);
+      if (error) throw error;
+    } catch (err) {
+      console.error("Error actualizando visibilidad:", err);
+      fetchProducts();
+    }
+  };
+
   const deleteProduct = async (id) => {
     setDbProducts(prev => prev.filter(p => p.id !== id));
     try {
@@ -1993,7 +2069,7 @@ export default function App() {
       {view === "admin" && (
         user
           ? (ADMIN_EMAILS.includes(user.email)
-              ? <Admin dbProducts={dbProducts} onUpdateStock={updateStock} onUpdatePrice={updatePrice} onUpdateProduct={updateProduct} onCreateProduct={createProduct} collections={allCollections} onCreateCollection={createCollection} colOrder={colOrder} onReorderCollections={handleReorderCollections} onUpdateCollection={updateCollection} onDeleteCollection={deleteCollection} onDeleteProduct={deleteProduct} onSaveProducts={saveProducts} />
+              ? <Admin dbProducts={dbProducts} onUpdateStock={updateStock} onUpdatePrice={updatePrice} onUpdateProduct={updateProduct} onCreateProduct={createProduct} collections={allCollections} onCreateCollection={createCollection} colOrder={colOrder} onReorderCollections={handleReorderCollections} onUpdateCollection={updateCollection} onDeleteCollection={deleteCollection} onDeleteProduct={deleteProduct} onSaveProducts={saveProducts} onToggleVisible={toggleVisible} />
               : null)
           : <AdminLogin onLogin={loginWithGoogle} />
       )}
