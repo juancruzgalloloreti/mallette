@@ -131,9 +131,10 @@ function Carousel({ imgs, onZoom }) {
         alt=""
         onClick={onZoom ? () => onZoom(imgs[idx]) : undefined}
         style={{
-          width: "100%", height: "100%", objectFit: "cover",
+          width: "100%", height: "100%", objectFit: "contain",
           animation: "fI .25s ease",
-          cursor: onZoom ? "zoom-in" : "default"
+          cursor: onZoom ? "zoom-in" : "default",
+          background: "transparent"
         }}
       />
 
@@ -1207,7 +1208,7 @@ function ProductEditor({ product, onSave, onCancel, collections }) {
 }
 
 
-function Admin({ dbProducts, onUpdateStock, onUpdatePrice, onUpdateProduct, onCreateProduct, collections, onCreateCollection, colOrder, onReorderCollections, onUpdateCollection, onDeleteCollection, onDeleteProduct, onSaveProducts, onToggleVisible }) {
+function Admin({ dbProducts, onUpdateStock, onUpdatePrice, onUpdateProduct, onCreateProduct, collections, onCreateCollection, colOrder, onReorderCollections, onUpdateCollection, onDeleteCollection, onDeleteProduct, onSaveProducts, onToggleVisible, onMoveProduct }) {
   const [tab, setTab] = useState("stock");
   const [editingId, setEditingId] = useState(null);
   const [creating, setCreating] = useState(false);
@@ -1215,6 +1216,7 @@ function Admin({ dbProducts, onUpdateStock, onUpdatePrice, onUpdateProduct, onCr
   const [editingCollectionObj, setEditingCollectionObj] = useState(null);
   const [saveMsg, setSaveMsg] = useState("");
   const [visFilter, setVisFilter] = useState("todos");
+  const [adminSearch, setAdminSearch] = useState("");
   const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
   
   useEffect(() => {
@@ -1280,6 +1282,14 @@ function Admin({ dbProducts, onUpdateStock, onUpdatePrice, onUpdateProduct, onCr
     setTimeout(() => setSaveMsg(""), 1800);
   };
 
+  const handleMoveProduct = async (colId, productIdx, dir) => {
+    if (onMoveProduct) {
+      await onMoveProduct(colId, productIdx, dir);
+      setSaveMsg("Orden de productos guardado");
+      setTimeout(() => setSaveMsg(""), 1800);
+    }
+  };
+
   return (
     <div style={{ maxWidth: "100%", padding: "32px 16px 80px" }}>
       <div style={{ marginBottom: 24, display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
@@ -1313,13 +1323,16 @@ function Admin({ dbProducts, onUpdateStock, onUpdatePrice, onUpdateProduct, onCr
       </div>
       {tab === "stock" && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: 12 }}>
-          {COLS.map(col => {
-            const colItems = dbProducts.filter(p => getCollectionId(p.coleccion) === col.id);
+          {orderedCollections.map(col => {
+            // Ordenar por campo `orden` para reflejar el orden manual actual
+            const colItems = dbProducts
+              .filter(p => getCollectionId(p.coleccion, collections) === col.id)
+              .sort((a, b) => (a.orden || 0) - (b.orden || 0));
             if (colItems.length === 0) return null;
             return (
               <div key={col.id}>
                 <p style={{ fontSize: 11, color: "#c9a96e", letterSpacing: ".1em", textTransform: "uppercase", fontWeight: 500, marginBottom: 8, marginTop: 6 }}>{col.name}</p>
-                {colItems.map(p => {
+                {colItems.map((p, pIdx) => {
                   let imgUrl = "";
                   if (Array.isArray(p.images_url) && p.images_url.length > 0) {
                     imgUrl = p.images_url[0];
@@ -1327,16 +1340,55 @@ function Admin({ dbProducts, onUpdateStock, onUpdatePrice, onUpdateProduct, onCr
                     try { imgUrl = JSON.parse(p.images_url)[0]; } catch(e) { imgUrl = p.images_url; }
                   }
                   if (!imgUrl) imgUrl = "https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=600&auto=format&fit=crop";
+                  const isFirst = pIdx === 0;
+                  const isLast = pIdx === colItems.length - 1;
                   return (
                     <div key={p.id} style={{ background: "#fff", borderRadius: 12, padding: "10px 14px", border: "1px solid " + (p.stock === 0 ? "#fca5a5" : p.stock <= 3 ? "#fcd34d" : "#ede8e0"), display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                      {/* Flechas de orden */}
+                      <div style={{ display: "flex", flexDirection: "column", gap: 2, flexShrink: 0 }}>
+                        <button
+                          onClick={() => handleMoveProduct(col.id, pIdx, -1)}
+                          disabled={isFirst}
+                          title="Subir producto"
+                          style={{
+                            width: 24, height: 24, border: "1px solid #ddd8d0", borderRadius: 6,
+                            background: isFirst ? "#f7f3ee" : "#fff",
+                            cursor: isFirst ? "default" : "pointer",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            opacity: isFirst ? 0.25 : 0.85,
+                            transition: "all .15s",
+                            touchAction: "manipulation",
+                            padding: 0
+                          }}
+                        >
+                          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#5c534a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="2,7 5,3 8,7"/></svg>
+                        </button>
+                        <button
+                          onClick={() => handleMoveProduct(col.id, pIdx, 1)}
+                          disabled={isLast}
+                          title="Bajar producto"
+                          style={{
+                            width: 24, height: 24, border: "1px solid #ddd8d0", borderRadius: 6,
+                            background: isLast ? "#f7f3ee" : "#fff",
+                            cursor: isLast ? "default" : "pointer",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            opacity: isLast ? 0.25 : 0.85,
+                            transition: "all .15s",
+                            touchAction: "manipulation",
+                            padding: 0
+                          }}
+                        >
+                          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#5c534a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="2,3 5,7 8,3"/></svg>
+                        </button>
+                      </div>
                       <div style={{ width: 42, height: 46, borderRadius: 7, overflow: "hidden", background: "#f7f3ee", flexShrink: 0 }}>
                         <img src={imgUrl} alt={p.modelo} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                       </div>
-                      <div style={{ flex: 1 }}>
-                        <p style={{ fontWeight: 500, fontSize: 13 }}>{p.modelo} {p.variantes_de_color !== "Único" && <span style={{ background: "#f0ebe3", padding: "2px 6px", borderRadius: 6, fontSize: 11, color: "#8b6914", marginLeft: 6 }}>{p.variantes_de_color}</span>}</p>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontWeight: 500, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.modelo} {p.variantes_de_color !== "Único" && <span style={{ background: "#f0ebe3", padding: "2px 6px", borderRadius: 6, fontSize: 11, color: "#8b6914", marginLeft: 6 }}>{p.variantes_de_color}</span>}</p>
                         <p style={{ fontSize: 11, color: "#c9a96e" }}>{fmt(p.precio)}</p>
                       </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 7, flexShrink: 0 }}>
                         <button onClick={() => onUpdateStock(p.id, -1)} style={{ width: 28, height: 28, border: "1px solid #ddd8d0", borderRadius: 7, background: "#fff", cursor: "pointer", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>-</button>
                         <span style={{ width: 24, textAlign: "center", fontWeight: 700, fontSize: 15 }}>{p.stock}</span>
                         <button onClick={() => onUpdateStock(p.id, 1)} className="bdk" style={{ width: 28, height: 28, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, padding: 0 }}>+</button>
@@ -1459,72 +1511,104 @@ function Admin({ dbProducts, onUpdateStock, onUpdatePrice, onUpdateProduct, onCr
                   </button>
                 </div>
               </div>
+
+              {/* Barra de búsqueda en Productos */}
+              <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#fff", border: "1px solid #ddd8d0", borderRadius: 10, padding: "8px 14px", marginBottom: 6 }}>
+                <svg width="16" height="16" fill="none" stroke="#c9a96e" strokeWidth="2.2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                <input
+                  value={adminSearch}
+                  onChange={e => setAdminSearch(e.target.value)}
+                  placeholder="Buscar producto por nombre..."
+                  style={{ border: "none", outline: "none", fontFamily: "Inter,sans-serif", fontSize: 14, width: "100%", background: "transparent", color: "#1a1612" }}
+                />
+                {adminSearch && (
+                  <button onClick={() => setAdminSearch("")} style={{ background: "none", border: "none", cursor: "pointer", color: "#a09890", fontSize: 18, padding: 0, lineHeight: 1 }}>×</button>
+                )}
+              </div>
+
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {dbProducts.filter(p => {
-                  if (visFilter === "visibles") return p.visible !== false;
-                  if (visFilter === "ocultos") return p.visible === false;
-                  return true;
-                }).map(p => {
-                  let imgUrl = "";
-                  if (Array.isArray(p.images_url) && p.images_url.length > 0) {
-                    imgUrl = p.images_url[0];
-                  } else if (typeof p.images_url === "string") {
-                    try { imgUrl = JSON.parse(p.images_url)[0]; } catch(e) { imgUrl = p.images_url; }
+                {(() => {
+                  const filteredProducts = dbProducts.filter(p => {
+                    if (visFilter === "visibles") return p.visible !== false;
+                    if (visFilter === "ocultos") return p.visible === false;
+                    return true;
+                  }).filter(p => {
+                    if (!adminSearch.trim()) return true;
+                    const q = adminSearch.toLowerCase().trim();
+                    return (p.modelo || "").toLowerCase().includes(q) ||
+                           (p.variantes_de_color && p.variantes_de_color !== "Único" && p.variantes_de_color.toLowerCase().includes(q));
+                  });
+
+                  if (filteredProducts.length === 0) {
+                    return (
+                      <div style={{ textAlign: "center", padding: "40px 16px", color: "#a09890", background: "#fff", borderRadius: 12, border: "1px solid #ede8e0" }}>
+                        <p style={{ fontSize: 14 }}>No se encontraron productos {adminSearch ? `para "${adminSearch}"` : ""}</p>
+                      </div>
+                    );
                   }
-                  if (!imgUrl) imgUrl = "https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=600&auto=format&fit=crop";
-                  const priceLabel = p.en_rebaja 
-                    ? `${fmt(Math.round(p.precio * (1 - (p.descuento_porcentaje || 0) / 100)))}` 
-                    : fmt(p.precio);
-                  return (
-                    <div key={p.id} style={{ background: "#fff", border: "1px solid #ede8e0", borderRadius: 12, padding: "12px 16px", display: "flex", alignItems: "center", gap: 14 }}>
-                      <div style={{ width: 48, height: 52, borderRadius: 8, overflow: "hidden", background: "#f7f3ee", flexShrink: 0 }}>
-                        <img src={imgUrl} alt={p.modelo} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+
+                  return filteredProducts.map(p => {
+                    let imgUrl = "";
+                    if (Array.isArray(p.images_url) && p.images_url.length > 0) {
+                      imgUrl = p.images_url[0];
+                    } else if (typeof p.images_url === "string") {
+                      try { imgUrl = JSON.parse(p.images_url)[0]; } catch(e) { imgUrl = p.images_url; }
+                    }
+                    if (!imgUrl) imgUrl = "https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=600&auto=format&fit=crop";
+                    const priceLabel = p.en_rebaja 
+                      ? `${fmt(Math.round(p.precio * (1 - (p.descuento_porcentaje || 0) / 100)))}` 
+                      : fmt(p.precio);
+                    return (
+                      <div key={p.id} style={{ background: "#fff", border: "1px solid #ede8e0", borderRadius: 12, padding: "12px 16px", display: "flex", alignItems: "center", gap: 14 }}>
+                        <div style={{ width: 48, height: 52, borderRadius: 8, overflow: "hidden", background: "#f7f3ee", flexShrink: 0 }}>
+                          <img src={imgUrl} alt={p.modelo} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ fontWeight: 600, fontSize: 14, color: "#1a1612", marginBottom: 2 }}>
+                            {p.visible !== false ? "🟢 " : "🔴 "}
+                            {p.modelo} {p.en_rebaja && <span style={{ background: "#f0ebe3", color: "#5c534a", fontSize: 10, padding: "2px 6px", borderRadius: 6, marginLeft: 6, fontWeight: 700 }}>{p.descuento_porcentaje}% OFF</span>}
+                          </p>
+                          <p style={{ fontSize: 12, color: "#a09890" }}>{p.coleccion} · {p.estilo} {p.variantes_de_color !== "Único" ? `· ${p.variantes_de_color}` : ""}</p>
+                        </div>
+                        <div style={{ textAlign: "right", flexShrink: 0 }}>
+                          <p style={{ fontWeight: 600, fontSize: 14, color: "#1a1612", marginBottom: 4 }}>
+                            {priceLabel}
+                            {p.en_rebaja && <span style={{ fontSize: 11, textDecoration: "line-through", color: "#a09890", marginLeft: 6, fontWeight: 400 }}>{fmt(p.precio)}</span>}
+                          </p>
+                          <p style={{ fontSize: 11, color: "#a09890" }}>Stock: {p.stock}</p>
+                        </div>
+                        <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 6, flexShrink: 0, marginLeft: 8 }}>
+                          <button 
+                            onClick={() => onToggleVisible && onToggleVisible(p.id, p.visible !== false)} 
+                            className="bol" 
+                            style={{ 
+                              padding: "8px 14px", 
+                              fontSize: 12, 
+                              color: p.visible !== false ? '#d97706' : '#16a34a', 
+                              borderColor: p.visible !== false ? '#fcd34d' : '#bbf7d0',
+                              background: p.visible !== false ? '#fffbeb' : '#f0fdf4'
+                            }}
+                          >
+                            {p.visible !== false ? 'Ocultar' : 'Mostrar'}
+                          </button>
+                          <button onClick={() => setEditingId(p.id)} className="bol" style={{ padding: "8px 14px", fontSize: 12 }}>Editar</button>
+                          <button
+                            onClick={() => {
+                              if (window.confirm(`¿Estás segura de que querés eliminar "${p.modelo}"${p.variantes_de_color !== "Único" ? ` (${p.variantes_de_color})` : ""}?\n\nEsta acción no se puede deshacer.`)) {
+                                onDeleteProduct && onDeleteProduct(p.id);
+                              }
+                            }}
+                            className="bol"
+                            style={{ padding: "8px 14px", fontSize: 12, borderColor: "#fca5a5", color: "#dc2626" }}
+                            title="Eliminar producto"
+                          >
+                            Eliminar
+                          </button>
+                        </div>
                       </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ fontWeight: 600, fontSize: 14, color: "#1a1612", marginBottom: 2 }}>
-                          {p.visible !== false ? "🟢 " : "🔴 "}
-                          {p.modelo} {p.en_rebaja && <span style={{ background: "#f0ebe3", color: "#5c534a", fontSize: 10, padding: "2px 6px", borderRadius: 6, marginLeft: 6, fontWeight: 700 }}>{p.descuento_porcentaje}% OFF</span>}
-                        </p>
-                        <p style={{ fontSize: 12, color: "#a09890" }}>{p.coleccion} · {p.estilo} {p.variantes_de_color !== "Único" ? `· ${p.variantes_de_color}` : ""}</p>
-                      </div>
-                      <div style={{ textAlign: "right", flexShrink: 0 }}>
-                        <p style={{ fontWeight: 600, fontSize: 14, color: "#1a1612", marginBottom: 4 }}>
-                          {priceLabel}
-                          {p.en_rebaja && <span style={{ fontSize: 11, textDecoration: "line-through", color: "#a09890", marginLeft: 6, fontWeight: 400 }}>{fmt(p.precio)}</span>}
-                        </p>
-                        <p style={{ fontSize: 11, color: "#a09890" }}>Stock: {p.stock}</p>
-                      </div>
-                      <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 6, flexShrink: 0, marginLeft: 8 }}>
-                        <button 
-                          onClick={() => onToggleVisible && onToggleVisible(p.id, p.visible !== false)} 
-                          className="bol" 
-                          style={{ 
-                            padding: "8px 14px", 
-                            fontSize: 12, 
-                            color: p.visible !== false ? '#d97706' : '#16a34a', 
-                            borderColor: p.visible !== false ? '#fcd34d' : '#bbf7d0',
-                            background: p.visible !== false ? '#fffbeb' : '#f0fdf4'
-                          }}
-                        >
-                          {p.visible !== false ? 'Ocultar' : 'Mostrar'}
-                        </button>
-                        <button onClick={() => setEditingId(p.id)} className="bol" style={{ padding: "8px 14px", fontSize: 12 }}>Editar</button>
-                        <button
-                          onClick={() => {
-                            if (window.confirm(`¿Estás segura de que querés eliminar "${p.modelo}"${p.variantes_de_color !== "Único" ? ` (${p.variantes_de_color})` : ""}?\n\nEsta acción no se puede deshacer.`)) {
-                              onDeleteProduct && onDeleteProduct(p.id);
-                            }
-                          }}
-                          className="bol"
-                          style={{ padding: "8px 14px", fontSize: 12, borderColor: "#fca5a5", color: "#dc2626" }}
-                          title="Eliminar producto"
-                        >
-                          Eliminar
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  });
+                })()}
               </div>
             </div>
           )}
@@ -2035,6 +2119,49 @@ export default function App() {
     }
   };
 
+  const handleMoveProductInCollection = async (colId, productIdx, dir) => {
+    // 1. Obtener todos los productos de esta colección ordenados por orden actual
+    const colItems = dbProducts
+      .filter(p => getCollectionId(p.coleccion, allCollections) === colId)
+      .sort((a, b) => (a.orden || 0) - (b.orden || 0));
+
+    const targetIdx = productIdx + dir;
+    if (targetIdx < 0 || targetIdx >= colItems.length) return;
+
+    // 2. Reordenar el arreglo de esta colección
+    const newColItems = [...colItems];
+    const [movedItem] = newColItems.splice(productIdx, 1);
+    newColItems.splice(targetIdx, 0, movedItem);
+
+    // 3. Multiplicador base para la colección para mantener consistencia
+    const colIndex = allCollections.findIndex(c => c.id === colId);
+    const baseOrder = colIndex >= 0 ? (colIndex + 1) * 100 : 100;
+
+    // 4. Asignar orden limpio, secuencial y único
+    const updates = newColItems.map((item, idx) => ({
+      id: item.id,
+      orden: baseOrder + idx
+    }));
+
+    const updateMap = new Map(updates.map(u => [u.id, u.orden]));
+
+    // 5. Actualizar el estado local inmediatamente
+    setDbProducts(prev => {
+      const updated = prev.map(p => updateMap.has(p.id) ? { ...p, orden: updateMap.get(p.id) } : p);
+      return updated.sort((a, b) => (a.orden || 0) - (b.orden || 0));
+    });
+
+    // 6. Guardar en Supabase permanentemente
+    try {
+      await Promise.all(
+        updates.map(u => supabase.from("products").update({ orden: u.orden }).eq("id", u.id))
+      );
+    } catch (err) {
+      console.error("Error guardando orden de productos en Supabase:", err);
+      fetchProducts();
+    }
+  };
+
   const groupedProducts = useMemo(() => groupProducts(dbProducts, allCollections), [dbProducts, allCollections]);
   const n = cart.reduce((s, c) => s + c.qty, 0);
 
@@ -2069,7 +2196,7 @@ export default function App() {
       {view === "admin" && (
         user
           ? (ADMIN_EMAILS.includes(user.email)
-              ? <Admin dbProducts={dbProducts} onUpdateStock={updateStock} onUpdatePrice={updatePrice} onUpdateProduct={updateProduct} onCreateProduct={createProduct} collections={allCollections} onCreateCollection={createCollection} colOrder={colOrder} onReorderCollections={handleReorderCollections} onUpdateCollection={updateCollection} onDeleteCollection={deleteCollection} onDeleteProduct={deleteProduct} onSaveProducts={saveProducts} onToggleVisible={toggleVisible} />
+              ? <Admin dbProducts={dbProducts} onUpdateStock={updateStock} onUpdatePrice={updatePrice} onUpdateProduct={updateProduct} onCreateProduct={createProduct} collections={allCollections} onCreateCollection={createCollection} colOrder={colOrder} onReorderCollections={handleReorderCollections} onUpdateCollection={updateCollection} onDeleteCollection={deleteCollection} onDeleteProduct={deleteProduct} onSaveProducts={saveProducts} onToggleVisible={toggleVisible} onMoveProduct={handleMoveProductInCollection} />
               : null)
           : <AdminLogin onLogin={loginWithGoogle} />
       )}
