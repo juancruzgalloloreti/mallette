@@ -1066,7 +1066,7 @@ function ProductEditor({ product, onSave, onCancel, collections }) {
         coleccion: form.coleccion,
         estilo: form.estilo.trim(),
         precio: Number(form.precio),
-        orden: Number(form.orden),
+        orden: (form.orden !== "" && !isNaN(Number(form.orden)) && Number(form.orden) > 0) ? Number(form.orden) : null,
         descripcion: form.descripcion,
         nota: form.nota,
         en_rebaja: form.en_rebaja,
@@ -1132,7 +1132,7 @@ function ProductEditor({ product, onSave, onCancel, collections }) {
         </div>
         <div>
           <label style={labelStyle}>Orden en la lista</label>
-          <input style={inputStyle} type="number" value={form.orden} onChange={e => upd("orden", e.target.value)} />
+          <input style={inputStyle} type="number" placeholder="Automático" value={form.orden} onChange={e => upd("orden", e.target.value)} />
         </div>
       </div>
 
@@ -1282,11 +1282,13 @@ function Admin({ dbProducts, onUpdateStock, onUpdatePrice, onUpdateProduct, onCr
     setTimeout(() => setSaveMsg(""), 1800);
   };
 
-  const handleMoveProduct = async (colId, productIdx, dir) => {
+  const handleMoveProduct = async (colId, modelName, dir) => {
     if (onMoveProduct) {
-      await onMoveProduct(colId, productIdx, dir);
-      setSaveMsg("Orden de productos guardado");
-      setTimeout(() => setSaveMsg(""), 1800);
+      const ok = await onMoveProduct(colId, modelName, dir);
+      if (ok !== false) {
+        setSaveMsg("Orden de productos guardado");
+        setTimeout(() => setSaveMsg(""), 1800);
+      }
     }
   };
 
@@ -1329,6 +1331,12 @@ function Admin({ dbProducts, onUpdateStock, onUpdatePrice, onUpdateProduct, onCr
               .filter(p => getCollectionId(p.coleccion, collections) === col.id)
               .sort((a, b) => (a.orden || 0) - (b.orden || 0));
             if (colItems.length === 0) return null;
+            // Extraer lista única de modelos para determinar primer y último producto en la categoría
+            const modelsInCol = [];
+            colItems.forEach(item => {
+              if (!modelsInCol.includes(item.modelo)) modelsInCol.push(item.modelo);
+            });
+
             return (
               <div key={col.id}>
                 <p style={{ fontSize: 11, color: "#c9a96e", letterSpacing: ".1em", textTransform: "uppercase", fontWeight: 500, marginBottom: 8, marginTop: 6 }}>{col.name}</p>
@@ -1340,47 +1348,53 @@ function Admin({ dbProducts, onUpdateStock, onUpdatePrice, onUpdateProduct, onCr
                     try { imgUrl = JSON.parse(p.images_url)[0]; } catch(e) { imgUrl = p.images_url; }
                   }
                   if (!imgUrl) imgUrl = "https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=600&auto=format&fit=crop";
-                  const isFirst = pIdx === 0;
-                  const isLast = pIdx === colItems.length - 1;
+                  const modelIdx = modelsInCol.indexOf(p.modelo);
+                  const isFirst = modelIdx === 0;
+                  const isLast = modelIdx === modelsInCol.length - 1;
+                  const isFirstVariantOfModel = colItems.findIndex(item => item.modelo === p.modelo) === pIdx;
                   return (
                     <div key={p.id} style={{ background: "#fff", borderRadius: 12, padding: "10px 14px", border: "1px solid " + (p.stock === 0 ? "#fca5a5" : p.stock <= 3 ? "#fcd34d" : "#ede8e0"), display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-                      {/* Flechas de orden */}
-                      <div style={{ display: "flex", flexDirection: "column", gap: 2, flexShrink: 0 }}>
-                        <button
-                          onClick={() => handleMoveProduct(col.id, pIdx, -1)}
-                          disabled={isFirst}
-                          title="Subir producto"
-                          style={{
-                            width: 24, height: 24, border: "1px solid #ddd8d0", borderRadius: 6,
-                            background: isFirst ? "#f7f3ee" : "#fff",
-                            cursor: isFirst ? "default" : "pointer",
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            opacity: isFirst ? 0.25 : 0.85,
-                            transition: "all .15s",
-                            touchAction: "manipulation",
-                            padding: 0
-                          }}
-                        >
-                          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#5c534a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="2,7 5,3 8,7"/></svg>
-                        </button>
-                        <button
-                          onClick={() => handleMoveProduct(col.id, pIdx, 1)}
-                          disabled={isLast}
-                          title="Bajar producto"
-                          style={{
-                            width: 24, height: 24, border: "1px solid #ddd8d0", borderRadius: 6,
-                            background: isLast ? "#f7f3ee" : "#fff",
-                            cursor: isLast ? "default" : "pointer",
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            opacity: isLast ? 0.25 : 0.85,
-                            transition: "all .15s",
-                            touchAction: "manipulation",
-                            padding: 0
-                          }}
-                        >
-                          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#5c534a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="2,3 5,7 8,3"/></svg>
-                        </button>
-                      </div>
+                      {/* Flechas de orden (solo en la primera fila de cada modelo para no duplicar controles) */}
+                      {isFirstVariantOfModel ? (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 2, flexShrink: 0 }}>
+                          <button
+                            onClick={() => handleMoveProduct(col.id, p.modelo, -1)}
+                            disabled={isFirst}
+                            title="Subir producto"
+                            style={{
+                              width: 24, height: 24, border: "1px solid #ddd8d0", borderRadius: 6,
+                              background: isFirst ? "#f7f3ee" : "#fff",
+                              cursor: isFirst ? "default" : "pointer",
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                              opacity: isFirst ? 0.25 : 0.85,
+                              transition: "all .15s",
+                              touchAction: "manipulation",
+                              padding: 0
+                            }}
+                          >
+                            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#5c534a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="2,7 5,3 8,7"/></svg>
+                          </button>
+                          <button
+                            onClick={() => handleMoveProduct(col.id, p.modelo, 1)}
+                            disabled={isLast}
+                            title="Bajar producto"
+                            style={{
+                              width: 24, height: 24, border: "1px solid #ddd8d0", borderRadius: 6,
+                              background: isLast ? "#f7f3ee" : "#fff",
+                              cursor: isLast ? "default" : "pointer",
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                              opacity: isLast ? 0.25 : 0.85,
+                              transition: "all .15s",
+                              touchAction: "manipulation",
+                              padding: 0
+                            }}
+                          >
+                            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#5c534a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="2,3 5,7 8,3"/></svg>
+                          </button>
+                        </div>
+                      ) : (
+                        <div style={{ width: 24, height: 50, flexShrink: 0 }} />
+                      )}
                       <div style={{ width: 42, height: 46, borderRadius: 7, overflow: "hidden", background: "#f7f3ee", flexShrink: 0 }}>
                         <img src={imgUrl} alt={p.modelo} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                       </div>
@@ -1888,6 +1902,15 @@ export default function App() {
         }
       }
 
+      // Calcular orden para productos nuevos o sin orden definido
+      const colId = getCollectionId(rows[0].coleccion, allCollections);
+      const colIndex = allCollections.findIndex(c => c.id === colId);
+      const baseOrder = colIndex >= 0 ? (colIndex + 1) * 100 : 100;
+      
+      const colProducts = dbProducts.filter(p => getCollectionId(p.coleccion, allCollections) === colId && p.modelo !== modelName);
+      const maxColOrder = colProducts.reduce((max, p) => Math.max(max, p.orden || 0), baseOrder - 1);
+      const fallbackOrden = maxColOrder + 1;
+
       const cleanModel = modelName.toLowerCase().trim().replace(/\s+/g, '_');
       let counter = 1;
       const rowsToUpsert = rows.map(r => {
@@ -1897,7 +1920,8 @@ export default function App() {
           // Para evitar colisiones si se crean dos sin nombre de color
           finalId = `${cleanModel}-${cleanColor || `color${counter++}`}`;
         }
-        return { ...r, id: finalId };
+        const assignedOrder = (r.orden && r.orden > 0) ? r.orden : fallbackOrden;
+        return { ...r, id: finalId, orden: assignedOrder };
       });
 
       const { error } = await supabase.from("products").upsert(rowsToUpsert);
@@ -2109,56 +2133,81 @@ export default function App() {
                      .sort((a, b) => (a.orden || 0) - (b.orden || 0));
         });
 
-        // Guardar en Supabase para cada producto
-        await Promise.all(
+        // Guardar en Supabase para cada producto con validación de error real
+        const results = await Promise.all(
           updates.map(u => supabase.from("products").update({ orden: u.orden }).eq("id", u.id))
         );
+        const errRes = results.find(r => r.error);
+        if (errRes) throw errRes.error;
       }
     } catch (err) {
       console.error("Error guardando orden de colecciones en BD:", err);
+      alert("Error al guardar el orden de colecciones en la base de datos: " + (err.message || JSON.stringify(err)));
+      fetchProducts();
     }
   };
 
-  const handleMoveProductInCollection = async (colId, productIdx, dir) => {
+  const handleMoveProductInCollection = async (colId, modelName, dir) => {
     // 1. Obtener todos los productos de esta colección ordenados por orden actual
     const colItems = dbProducts
       .filter(p => getCollectionId(p.coleccion, allCollections) === colId)
       .sort((a, b) => (a.orden || 0) - (b.orden || 0));
 
-    const targetIdx = productIdx + dir;
-    if (targetIdx < 0 || targetIdx >= colItems.length) return;
+    // 2. Extraer orden único de modelos respetando el orden actual
+    const modelOrder = [];
+    colItems.forEach(p => {
+      if (!modelOrder.includes(p.modelo)) {
+        modelOrder.push(p.modelo);
+      }
+    });
 
-    // 2. Reordenar el arreglo de esta colección
-    const newColItems = [...colItems];
-    const [movedItem] = newColItems.splice(productIdx, 1);
-    newColItems.splice(targetIdx, 0, movedItem);
+    const currentIdx = modelOrder.indexOf(modelName);
+    if (currentIdx === -1) return;
 
-    // 3. Multiplicador base para la colección para mantener consistencia
+    const targetIdx = currentIdx + dir;
+    if (targetIdx < 0 || targetIdx >= modelOrder.length) return;
+
+    // 3. Reordenar el arreglo de modelos
+    const newModelOrder = [...modelOrder];
+    const [movedModel] = newModelOrder.splice(currentIdx, 1);
+    newModelOrder.splice(targetIdx, 0, movedModel);
+
+    // 4. Multiplicador base para la colección para mantener consistencia
     const colIndex = allCollections.findIndex(c => c.id === colId);
     const baseOrder = colIndex >= 0 ? (colIndex + 1) * 100 : 100;
 
-    // 4. Asignar orden limpio, secuencial y único
-    const updates = newColItems.map((item, idx) => ({
-      id: item.id,
-      orden: baseOrder + idx
-    }));
+    // 5. Asignar orden limpio y secuencial a todas las filas de cada modelo
+    let counter = 0;
+    const updates = [];
+    newModelOrder.forEach(mName => {
+      const rows = colItems.filter(p => p.modelo === mName);
+      rows.forEach(r => {
+        updates.push({ id: r.id, orden: baseOrder + counter });
+        counter++;
+      });
+    });
 
     const updateMap = new Map(updates.map(u => [u.id, u.orden]));
 
-    // 5. Actualizar el estado local inmediatamente
+    // 6. Actualizar el estado local inmediatamente
     setDbProducts(prev => {
       const updated = prev.map(p => updateMap.has(p.id) ? { ...p, orden: updateMap.get(p.id) } : p);
       return updated.sort((a, b) => (a.orden || 0) - (b.orden || 0));
     });
 
-    // 6. Guardar en Supabase permanentemente
+    // 7. Guardar en Supabase permanentemente verificando errores reales
     try {
-      await Promise.all(
+      const results = await Promise.all(
         updates.map(u => supabase.from("products").update({ orden: u.orden }).eq("id", u.id))
       );
+      const errRes = results.find(r => r.error);
+      if (errRes) throw errRes.error;
+      return true;
     } catch (err) {
       console.error("Error guardando orden de productos en Supabase:", err);
+      alert("Error al guardar el orden en la base de datos: " + (err.message || JSON.stringify(err)));
       fetchProducts();
+      return false;
     }
   };
 
